@@ -16,7 +16,7 @@ jobs:
 
       - uses: arduino/setup-protoc@v2
 
-      - uses: Swatinem/rust-cache@v1
+#      - uses: Swatinem/rust-cache@v1
 
       - name: cargo install
         run: cargo install clippy-sarif sarif-fmt
