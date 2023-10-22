@@ -91,7 +91,9 @@ where
         let receiver_network_id = receiver.constant_fetch_or_default(&R::network_id())?;
 
         let GenericNetworkId::Sub(receiver_network_id) = receiver_network_id else {
-            return Err(anyhow::anyhow!("Error! Reciever is NOT a Substrate Network!"));
+            return Err(anyhow::anyhow!(
+                "Error! Reciever is NOT a Substrate Network!"
+            ));
         };
 
         Ok(Relay {

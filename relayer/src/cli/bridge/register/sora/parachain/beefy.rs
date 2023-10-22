@@ -80,7 +80,8 @@ impl Command {
             &parachain_runtime::constants()
                 .substrate_bridge_outbound_channel()
                 .this_network_id(),
-        )? else {
+        )?
+        else {
             return Err(anyhow!("Network id not found"));
         };
 

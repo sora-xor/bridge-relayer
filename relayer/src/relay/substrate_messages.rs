@@ -135,8 +135,12 @@ where
         )
         .await?;
         let commitment_hash = commitment.offchain_data.commitment.hash();
-        let bridge_types::GenericCommitment::EVM(commitment_inner) = commitment.offchain_data.commitment else {
-            return Err(anyhow::anyhow!("Invalid commitment. EVM commitment is expected"));
+        let bridge_types::GenericCommitment::EVM(commitment_inner) =
+            commitment.offchain_data.commitment
+        else {
+            return Err(anyhow::anyhow!(
+                "Invalid commitment. EVM commitment is expected"
+            ));
         };
         let inbound_channel_nonce = self.inbound_channel_nonce().await?;
         if commitment_inner.nonce <= inbound_channel_nonce {

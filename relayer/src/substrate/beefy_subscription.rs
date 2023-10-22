@@ -79,19 +79,22 @@ where
             let latest_commitment = latest_commitment.clone();
             async move {
                 loop {
-                    let vset = sub.storage_fetch_or_default(&T::current_validator_set(), ()).await?;
+                    let vset = sub
+                        .storage_fetch_or_default(&T::current_validator_set(), ())
+                        .await?;
                     if vset.id < i {
                         tokio::time::sleep(T::average_block_time()).await;
                         continue;
                     }
                     let Some(block) = find_mandatory_commitment(&sub, i).await? else {
-                            tokio::time::sleep(T::average_block_time()).await;
-                            continue;
-                        };
-                    let Some(justification) = get_commitment_from_block(&sub, block, true).await? else {
-                            tokio::time::sleep(T::average_block_time()).await;
-                            continue;
-                        };
+                        tokio::time::sleep(T::average_block_time()).await;
+                        continue;
+                    };
+                    let Some(justification) = get_commitment_from_block(&sub, block, true).await?
+                    else {
+                        tokio::time::sleep(T::average_block_time()).await;
+                        continue;
+                    };
                     latest_commitment.store(block.into(), Ordering::Relaxed);
                     return Ok(justification);
                 }
@@ -116,10 +119,9 @@ where
                 let vset_storage = T::current_validator_set();
                 let latest_sent_vset = sub
                     .storage_fetch_or_default(&vset_storage, latest_sent)
-                    .await?.id;
-                let best_vset = sub
-                    .storage_fetch_or_default(&vset_storage, ())
-                    .await?.id;
+                    .await?
+                    .id;
+                let best_vset = sub.storage_fetch_or_default(&vset_storage, ()).await?.id;
                 if latest_sent_vset < best_vset {
                     debug!("Waiting for mandatory commitment");
                     tokio::time::sleep(T::average_block_time()).await;
@@ -134,7 +136,13 @@ where
                     if block_to_check <= latest_sent {
                         break;
                     }
-                    let Some(justification) = get_commitment_from_block(&sub, block_to_check.unique_saturated_into(), false).await? else {
+                    let Some(justification) = get_commitment_from_block(
+                        &sub,
+                        block_to_check.unique_saturated_into(),
+                        false,
+                    )
+                    .await?
+                    else {
                         continue;
                     };
                     latest_commitment.store(block_to_check, Ordering::Relaxed);

@@ -80,8 +80,9 @@ impl Command {
             &mainnet_runtime::constants()
                 .substrate_bridge_outbound_channel()
                 .this_network_id(),
-        )? else {
-            return Err(anyhow!("Network ID not found")); 
+        )?
+        else {
+            return Err(anyhow!("Network ID not found"));
         };
 
         let call = parachain_runtime::runtime_types::sora2_parachain_runtime::RuntimeCall::BeefyLightClient(parachain_runtime::runtime_types::beefy_light_client::pallet::Call::initialize {
