@@ -16,10 +16,12 @@ jobs:
 
       - uses: arduino/setup-protoc@v2
 
-#      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
 
       - name: cargo install
-        run: cargo install clippy-sarif sarif-fmt
+        uses: taiki-e/install-action@v2
+        with:
+          tool: clippy-sarif, sarif-fmt
 
       - name: cargo fmt
         run: cargo fmt --check
