@@ -68,7 +68,7 @@ pub type UnboundedGenericCommitmentWithBlock<BlockNumber> =
     bridge_types::types::GenericCommitmentWithBlock<BlockNumber, MaxU32, MaxU32>;
 
 #[subxt::subxt(
-    runtime_metadata_path = "src/bytes/metadata.scale",
+    runtime_metadata_path = "sora2-network/substrate-gen/src/bytes/metadata.scale",
     derive_for_all_types = "Clone"
 )]
 pub mod runtime {

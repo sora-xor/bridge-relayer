@@ -3,9 +3,6 @@ name = "substrate-gen"
 version = "0.1.0"
 edition = "2021"
 
-[build-dependencies]
-reqwest = { version = "0.11.2", features = ["blocking"] }
-
 [dependencies]
 common = { git = "https://github.com/sora-xor/sora2-network.git" }
 subxt = { version = "0.25.0" }

@@ -8786,7 +8786,6 @@ dependencies = [
  "common",
  "jsonrpsee",
  "parity-scale-codec",
- "reqwest",
  "scale-info",
  "serde",
  "sp-beefy",
