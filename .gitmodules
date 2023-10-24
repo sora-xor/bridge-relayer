@@ -10,7 +10,7 @@
 	path = substrate-gen/sora2-network
 	url = https://github.com/sora-xor/sora2-network.git
 	branch = refactor/mv-relayer
-[submodule "liberland-gen/liberland_substrate"]
-	path = liberland-gen/liberland_substrate
-	url = https://github.com/N1ghtStorm/liberland_substrate.git
-	branch = add_sora_bridge
+# [submodule "liberland-gen/liberland_substrate"]
+# 	path = liberland-gen/liberland_substrate
+# 	url = https://github.com/N1ghtStorm/liberland_substrate.git
+# 	branch = add_sora_bridge
