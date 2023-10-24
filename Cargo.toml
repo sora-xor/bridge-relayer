@@ -122,5 +122,6 @@ members = [
   "substrate-gen",
   "ethereum-gen",
   "parachain-gen",
+  "liberland-gen",
   "relayer",
 ]
