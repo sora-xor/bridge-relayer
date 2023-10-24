@@ -35,7 +35,7 @@ pub type UnboundedGenericCommitmentWithBlock<BlockNumber> =
     bridge_types::types::GenericCommitmentWithBlock<BlockNumber, MaxU32, MaxU32>;
 
 #[subxt::subxt(
-    runtime_metadata_path = "liberland_substrate/liberland-gen/src/bytes/parachain_metadata.scale",
+    runtime_metadata_path = "liberland_substrate/liberland-gen/src/bytes/liberland_metadata.scale",
     derive_for_all_types = "Clone"
 )]
 pub mod parachain_runtime {

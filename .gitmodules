@@ -14,3 +14,7 @@
 # 	path = liberland-gen/liberland_substrate
 # 	url = https://github.com/N1ghtStorm/liberland_substrate.git
 # 	branch = add_sora_bridge
+[submodule "liberland-gen/liberland_substrate"]
+	path = liberland-gen/liberland_substrate
+	url = https://github.com/N1ghtStorm/liberland_substrate.git
+	branch = add_sora_bridge
