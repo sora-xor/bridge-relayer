@@ -34,9 +34,7 @@
 // #[derive(Args, Clone, Debug)]
 // pub(crate) struct Command {
 //     #[clap(flatten)]
-//     para: ParachainClient,
-//     #[clap(flatten)]
-//     sub: SubstrateClient,
+//     para: LiberlandClient,
 //     /// Send all Beefy commitments
 //     #[clap(short, long)]
 //     send_unneeded_commitments: bool,
@@ -44,8 +42,8 @@
 
 // impl Command {
 //     pub(super) async fn run(&self) -> AnyResult<()> {
-//         let sender = self.para.get_unsigned_substrate().await?;
-//         let receiver = self.sub.get_signed_substrate().await?;
+//         let receiver = self.para.get_signed_substrate().await?;
+//         let sender = receiver.clone().unsigned();
 //         let syncer = crate::relay::beefy_syncer::BeefySyncer::new();
 //         let beefy_relay = RelayBuilder::new()
 //             .with_sender_client(sender.clone())

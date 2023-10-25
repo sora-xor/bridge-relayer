@@ -28,32 +28,25 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use sp_core::ecdsa;
+// mod beefy;
+mod trusted;
 
 use crate::cli::prelude::*;
-use crate::relay::multisig_messages::RelayBuilder;
+use clap::*;
 
-#[derive(Args, Clone, Debug)]
-pub(crate) struct Command {
-    #[clap(flatten)]
-    para: ParachainClient,
-    #[clap(long)]
-    signer: String,
+#[derive(Debug, Subcommand)]
+pub(crate) enum Commands {
+    /// Sora to liberland relay with trusted peers
+    Trusted(trusted::Command),
+    // /// Parachain to parachain relay with BEEFY proofs
+    // BEEFY(beefy::Command),
 }
 
-impl Command {
-    pub(super) async fn run(&self) -> AnyResult<()> {
-        let receiver = self.para.get_unsigned_substrate().await?;
-        let sender = receiver.clone();
-        let signer = ecdsa::Pair::from_string(&self.signer, None)?;
-        let messages_relay = RelayBuilder::new()
-            .with_sender_client(sender)
-            .with_receiver_client(receiver)
-            .with_signer(signer)
-            .build()
-            .await
-            .context("build sora to sora relay")?;
-        messages_relay.run().await?;
-        Ok(())
+impl Commands {
+    pub async fn run(&self) -> AnyResult<()> {
+        match self {
+            // Commands::BEEFY(cmd) => cmd.run().await,
+            Commands::Trusted(cmd) => cmd.run().await,
+        }
     }
 }

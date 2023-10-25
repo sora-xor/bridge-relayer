@@ -38,14 +38,14 @@ pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    para: LiberlandClient,
+    liber: LiberlandClient,
     #[clap(long)]
     signer: String,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
-        let sender = self.para.get_unsigned_substrate().await?;
+        let sender = self.liber.get_unsigned_substrate().await?;
         let receiver = self.sub.get_unsigned_substrate().await?;
         let signer = ecdsa::Pair::from_string(&self.signer, None)?;
         let messages_relay = RelayBuilder::new()
@@ -54,7 +54,7 @@ impl Command {
             .with_signer(signer)
             .build()
             .await
-            .context("build sora to sora relay")?;
+            .context("build liberland to sora relay")?;
         messages_relay.run().await?;
         Ok(())
     }

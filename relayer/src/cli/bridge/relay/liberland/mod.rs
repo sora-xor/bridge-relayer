@@ -28,7 +28,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod parachain;
+mod liberland;
 mod sora;
 
 use crate::cli::prelude::*;
@@ -36,12 +36,12 @@ use clap::*;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
-    /// Parachain to SORA relay commands
+    /// Liberland to SORA relay commands
     #[clap(subcommand)]
     Sora(sora::Commands),
-    /// Parachain to parachain relay commands
+    /// SORA to Liberland relay commands
     #[clap(subcommand)]
-    Liberland(parachain::Commands),
+    Liberland(liberland::Commands),
 }
 
 impl Commands {

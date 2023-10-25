@@ -651,11 +651,11 @@ impl ReceiverConfig for LiberlandConfig {
     type MultiProof = liberland_runtime::runtime_types::multisig_verifier::Proof;
 
     fn submit_signature_commitment(
-        network_id: SubNetworkId,
-        commitment: Commitment,
-        validator_proof: ValidatorProof,
-        latest_mmr_leaf: BeefyMMRLeaf,
-        proof: Proof<H256>,
+        _network_id: SubNetworkId,
+        _commitment: Commitment,
+        _validator_proof: ValidatorProof,
+        _latest_mmr_leaf: BeefyMMRLeaf,
+        _proof: Proof<H256>,
     ) -> StaticTxPayload<Self::SubmitSignatureCommitment> {
         // parachain_runtime::tx()
         //     .beefy_light_client()
@@ -680,7 +680,7 @@ impl ReceiverConfig for LiberlandConfig {
     }
 
     fn current_validator_set(
-        network_id: SubNetworkId,
+        _network_id: SubNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, (), Yes> {
         // liberland_runtime::storage()
         //     .beefy_light_client()
@@ -689,7 +689,7 @@ impl ReceiverConfig for LiberlandConfig {
     }
 
     fn next_validator_set(
-        network_id: SubNetworkId,
+        _network_id: SubNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, (), Yes> {
         // liberland_runtime::storage()
         //     .beefy_light_client()
@@ -698,7 +698,7 @@ impl ReceiverConfig for LiberlandConfig {
     }
 
     fn latest_beefy_block(
-        network_id: SubNetworkId,
+        _network_id: SubNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<u64>, Yes, Yes, Yes> {
         // liberland_runtime::storage()
         //     .beefy_light_client()

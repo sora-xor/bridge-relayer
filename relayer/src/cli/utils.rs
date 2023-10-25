@@ -274,16 +274,16 @@ impl EthereumClient {
 #[derive(Args, Debug, Clone)]
 pub struct LiberlandClient {
     #[clap(long, from_global)]
-    substrate_key: Option<String>,
+    liberland_key: Option<String>,
     #[clap(long, from_global)]
-    substrate_key_file: Option<String>,
+    liberland_key_file: Option<String>,
     #[clap(long, from_global)]
-    substrate_url: Option<String>,
+    liberland_url: Option<String>,
 }
 
 impl LiberlandClient {
     pub fn get_key_string(&self) -> AnyResult<String> {
-        match (&self.substrate_key, &self.substrate_key_file) {
+        match (&self.liberland_key, &self.liberland_key_file) {
             (Some(_), Some(_)) => Err(CliError::BothKeyTypesProvided.into()),
             (None, None) => Err(CliError::SubstrateKey.into()),
             (Some(key), _) => Ok(key.clone()),
@@ -293,7 +293,7 @@ impl LiberlandClient {
 
     pub fn get_url(&self) -> AnyResult<String> {
         Ok(self
-            .substrate_url
+            .liberland_url
             .clone()
             .ok_or(CliError::SubstrateEndpoint)?)
     }
