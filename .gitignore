@@ -2,3 +2,5 @@
 # will have compiled files and executables
 debug/
 target/
+parachain-gen/bytes/*
+substrate-gen/bytes/*

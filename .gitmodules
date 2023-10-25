@@ -2,11 +2,3 @@
 	path = ethereum-gen/sora2-federated-bridge-evm-contracts
 	url = https://github.com/sora-xor/sora2-federated-bridge-evm-contracts.git
 	branch = outdated
-[submodule "parachain-gen/sora2-parachain"]
-	path = parachain-gen/sora2-parachain
-	url = https://github.com/sora-xor/sora2-parachain.git
-	branch = develop
-[submodule "substrate-gen/sora2-network"]
-	path = substrate-gen/sora2-network
-	url = https://github.com/sora-xor/sora2-network.git
-	branch = refactor/mv-relayer
