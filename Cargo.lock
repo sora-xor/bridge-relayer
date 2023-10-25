@@ -856,6 +856,7 @@ dependencies = [
  "k256",
  "keccak-hasher",
  "leaf-provider-rpc",
+ "liberland-gen",
  "log",
  "lru 0.7.8",
  "mmr-rpc",

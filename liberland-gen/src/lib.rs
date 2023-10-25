@@ -38,7 +38,7 @@ pub type UnboundedGenericCommitmentWithBlock<BlockNumber> =
     runtime_metadata_path = "liberland_substrate/liberland-gen/src/bytes/liberland_metadata.scale",
     derive_for_all_types = "Clone"
 )]
-pub mod parachain_runtime {
+pub mod liberland_runtime {
     #[subxt(substitute_type = "bridge_types::substrate::BridgeMessage")]
     use crate::UnboundedBridgeMessage;
     #[subxt(substitute_type = "bridge_types::GenericCommitment")]

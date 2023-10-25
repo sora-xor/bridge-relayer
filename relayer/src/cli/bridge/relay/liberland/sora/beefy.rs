@@ -28,37 +28,43 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod evm;
-mod parachain;
-mod liberland;
-mod sora;
-
 use crate::cli::prelude::*;
-use clap::*;
+use crate::relay::parachain::RelayBuilder;
 
-#[derive(Debug, Subcommand)]
-pub(crate) enum Commands {
-    /// Relay commands from EVM to another networks
-    #[clap(subcommand)]
-    EVM(evm::Commands),
-    /// Relay commands from SORA to another networks
-    #[clap(subcommand)]
-    Sora(sora::Commands),
-    /// Relay commands from parachain to another networks
-    #[clap(subcommand)]
-    Parachain(parachain::Commands),
-    /// Relay commands from parachain to another networks
-    #[clap(subcommand)]
-    Liberland(liberland::Commands),
+#[derive(Args, Clone, Debug)]
+pub(crate) struct Command {
+    #[clap(flatten)]
+    para: ParachainClient,
+    #[clap(flatten)]
+    sub: SubstrateClient,
+    /// Send all Beefy commitments
+    #[clap(short, long)]
+    send_unneeded_commitments: bool,
 }
 
-impl Commands {
-    pub async fn run(&self) -> AnyResult<()> {
-        match self {
-            Commands::EVM(cmd) => cmd.run().await,
-            Commands::Sora(cmd) => cmd.run().await,
-            Commands::Parachain(cmd) => cmd.run().await,
-            Commands::Liberland(cmd) => cmd.run().await,
-        }
+impl Command {
+    pub(super) async fn run(&self) -> AnyResult<()> {
+        let sender = self.para.get_unsigned_substrate().await?;
+        let receiver = self.sub.get_signed_substrate().await?;
+        let syncer = crate::relay::beefy_syncer::BeefySyncer::new();
+        let beefy_relay = RelayBuilder::new()
+            .with_sender_client(sender.clone())
+            .with_receiver_client(receiver.clone())
+            .with_syncer(syncer.clone())
+            .build()
+            .await
+            .context("build sora to sora relay")?;
+        let messages_relay = crate::relay::parachain_messages::RelayBuilder::new()
+            .with_sender_client(sender)
+            .with_receiver_client(receiver.unsigned())
+            .with_syncer(syncer)
+            .build()
+            .await
+            .context("build sora to sora relay")?;
+        tokio::try_join!(
+            beefy_relay.run(!self.send_unneeded_commitments),
+            messages_relay.run()
+        )?;
+        Ok(())
     }
 }

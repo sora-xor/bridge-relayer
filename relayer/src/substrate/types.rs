@@ -39,6 +39,9 @@ use sp_mmr_primitives::Proof;
 pub use substrate_gen::{
     runtime as mainnet_runtime, SoraExtrinsicParams as MainnetExtrinsicParams,
 };
+pub use liberland_gen::{
+    liberland_runtime, SoraExtrinsicParams as LiberlandExtrinsicParams,
+};
 pub use subxt::rpc::ChainBlock;
 pub use subxt::rpc::Subscription;
 use subxt::tx::TxPayload;
