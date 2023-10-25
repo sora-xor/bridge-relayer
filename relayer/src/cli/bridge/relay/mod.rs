@@ -47,7 +47,7 @@ pub(crate) enum Commands {
     /// Relay commands from parachain to another networks
     #[clap(subcommand)]
     Parachain(parachain::Commands),
-    /// Relay commands from parachain to another networks
+    /// Relay commands from liberland to another networks
     #[clap(subcommand)]
     Liberland(liberland::Commands),
 }
