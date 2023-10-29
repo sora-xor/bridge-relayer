@@ -63,6 +63,8 @@ pub mod parachain_runtime {
     use ::bridge_types::types::AssetKind;
     #[subxt(substitute_type = "bridge_types::types::AuxiliaryDigest")]
     use ::bridge_types::types::AuxiliaryDigest;
+    #[subxt(substitute_type = "bridge_types::types::AuxiliaryDigestItem")]
+    use ::bridge_types::types::AuxiliaryDigestItem;
     #[subxt(substitute_type = "bridge_types::types::LeafExtraData")]
     use ::bridge_types::types::LeafExtraData;
     #[subxt(substitute_type = "bridge_types::types::Message")]

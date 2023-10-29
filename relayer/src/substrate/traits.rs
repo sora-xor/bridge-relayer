@@ -8,7 +8,7 @@ use bridge_common::{
     beefy_types::{BeefyMMRLeaf, Commitment, ValidatorProof, ValidatorSet},
     simplified_proof::Proof,
 };
-use bridge_types::{types::AuxiliaryDigest, GenericNetworkId, SubNetworkId, H256};
+use bridge_types::{types::{AuxiliaryDigest, AuxiliaryDigestItem}, GenericNetworkId, SubNetworkId, H256};
 use sp_core::ecdsa;
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, Member},
@@ -80,6 +80,8 @@ pub trait SenderConfig: ConfigExt + 'static {
     fn latest_commitment(
         network_id: GenericNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<GenericCommitmentWithBlockOf<Self>>, Yes, (), Yes>;
+
+    fn latest_digest() -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()>;
 
     fn bridge_outbound_nonce(
         network_id: GenericNetworkId,
@@ -216,6 +218,10 @@ impl SenderConfig for ParachainConfig {
         }
     }
 
+    fn latest_digest() -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
+        parachain_runtime::storage().leaf_provider().latest_digest()
+    }
+
     fn bridge_outbound_nonce(
         network_id: GenericNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<u64>, Yes, Yes, Yes> {
@@ -302,6 +308,10 @@ impl SenderConfig for MainnetConfig {
         }
     }
 
+    fn latest_digest() -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
+        mainnet_runtime::storage().leaf_provider().latest_digest()
+    }
+
     fn bridge_outbound_nonce(
         network_id: GenericNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<u64>, Yes, Yes, Yes> {
@@ -364,11 +374,11 @@ impl SenderConfig for LiberlandConfig {
     type SubmitSignature = liberland_runtime::bridge_data_signer::calls::Approve;
 
     fn current_session_index() -> StaticStorageAddress<DecodeStaticType<u32>, Yes, Yes, ()> {
-        mainnet_runtime::storage().session().current_index()
+        liberland_runtime::storage().session().current_index()
     }
 
     fn network_id() -> StaticConstantAddress<DecodeStaticType<bridge_types::GenericNetworkId>> {
-        mainnet_runtime::constants()
+        liberland_runtime::constants()
             .substrate_bridge_outbound_channel()
             .this_network_id()
     }
@@ -384,6 +394,10 @@ impl SenderConfig for LiberlandConfig {
             GenericNetworkId::EVM(_) => unimplemented!("Bridge from liberland to EVM network is supported"),
             _ => unimplemented!("This storage is not supported for HASHI bridge"),
         }
+    }
+
+    fn latest_digest() -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
+        liberland_runtime::storage().leaf_provider().latest_digest()
     }
 
     fn bridge_outbound_nonce(
