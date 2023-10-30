@@ -60,7 +60,7 @@ codec = { package = "parity-scale-codec", version = "3", default-features = fals
 ] }
 thiserror = "1.0.30"
 lru = "0.7.2"
-k256 = "0.11.6"
+k256 = "0.13.1"
 assets-rpc = { git = "https://github.com/sora-xor/sora2-network.git" }
 assets-runtime-api = { git = "https://github.com/sora-xor/sora2-network.git" }
 eth-bridge = { git = "https://github.com/sora-xor/sora2-network.git" }
