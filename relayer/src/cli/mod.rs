@@ -45,7 +45,7 @@ pub use utils::*;
 use crate::prelude::*;
 use clap::*;
 
-/// App struct
+/// Bridge relayer
 #[derive(Parser, Debug)]
 #[clap(version, author)]
 pub struct Cli {
