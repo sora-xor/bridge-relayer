@@ -1,0 +1,4 @@
+[submodule "ethereum-gen/sora2-federated-bridge-evm-contracts"]
+	path = ethereum-gen/sora2-federated-bridge-evm-contracts
+	url = https://github.com/sora-xor/sora2-federated-bridge-evm-contracts.git
+	branch = outdated
