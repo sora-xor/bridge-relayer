@@ -860,7 +860,7 @@ dependencies = [
  "keccak-hasher",
  "leaf-provider-rpc",
  "log",
- "lru",
+ "lru 0.12.0",
  "mmr-rpc",
  "pallet-beefy-mmr",
  "parachain-gen",
@@ -4180,7 +4180,7 @@ dependencies = [
  "libp2p-core 0.38.0",
  "libp2p-swarm",
  "log",
- "lru",
+ "lru 0.8.1",
  "prost",
  "prost-build",
  "prost-codec",
@@ -4636,6 +4636,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6e8aaa3f231bb4bd57b84b2d5dc3ae7f350265df8aa96492e0bc394a1571909"
 dependencies = [
  "hashbrown 0.12.3",
+]
+
+[[package]]
+name = "lru"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1efa59af2ddfad1854ae27d75009d538d0998b4b2fd47083e743ac1a10e46c60"
+dependencies = [
+ "hashbrown 0.14.2",
 ]
 
 [[package]]
@@ -6956,7 +6965,7 @@ name = "sc-executor"
 version = "0.10.0-dev"
 source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#b12c8d200054c92586ec33f5dfc5d0e109958004"
 dependencies = [
- "lru",
+ "lru 0.8.1",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sc-executor-common",
@@ -7050,7 +7059,7 @@ dependencies = [
  "ip_network",
  "libp2p",
  "log",
- "lru",
+ "lru 0.8.1",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
@@ -7111,7 +7120,7 @@ dependencies = [
  "futures-timer",
  "libp2p",
  "log",
- "lru",
+ "lru 0.8.1",
  "sc-network-common",
  "sc-peerset",
  "sp-runtime",
@@ -7907,7 +7916,7 @@ source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#
 dependencies = [
  "futures",
  "log",
- "lru",
+ "lru 0.8.1",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sp-api",
