@@ -39,9 +39,9 @@ futures = "0.3.17"
 ethash = { git = "https://github.com/sora-xor/ethash.git", branch = "sora-v1.6.0", default-features = false }
 log = "0.4.14"
 env_logger = "0.9.0"
-sha3 = { version = "0.10.0" }
-sha2 = "0.10.0"
-sha1 = "0.10.6"
+sha3 = "0.10"
+sha2 = "0.10"
+sha1 = "0.10"
 ethereum-types = { version = "0.14.0", features = ["serialize"] }
 rayon = "1.5.1"
 serde = { version = "1.0.131", features = ["derive"] }
