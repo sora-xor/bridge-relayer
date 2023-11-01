@@ -32,7 +32,7 @@ mod cli;
 mod ethereum;
 mod relay;
 mod substrate;
-use clap::StructOpt;
+use clap::Parser;
 use prelude::*;
 
 #[macro_use]
