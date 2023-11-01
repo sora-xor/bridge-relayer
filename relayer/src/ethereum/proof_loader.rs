@@ -28,6 +28,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -55,9 +56,15 @@ impl ProofLoader {
     pub fn new(eth: EthUnsignedClient, base_dir: PathBuf) -> Self {
         Self {
             base_dir,
-            cache_merkle: Arc::new(Mutex::new(lru::LruCache::new(2))),
-            cache_ethash: Arc::new(Mutex::new(lru::LruCache::new(2))),
-            receipts: Arc::new(Mutex::new(lru::LruCache::new(10))),
+            cache_merkle: Arc::new(Mutex::new(lru::LruCache::new(
+                NonZeroUsize::new(2).unwrap(),
+            ))),
+            cache_ethash: Arc::new(Mutex::new(lru::LruCache::new(
+                NonZeroUsize::new(2).unwrap(),
+            ))),
+            receipts: Arc::new(Mutex::new(lru::LruCache::new(
+                NonZeroUsize::new(10).unwrap(),
+            ))),
             eth,
         }
     }

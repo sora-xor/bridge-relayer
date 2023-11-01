@@ -59,7 +59,7 @@ codec = { package = "parity-scale-codec", version = "3", default-features = fals
   "chain-error",
 ] }
 thiserror = "1.0.30"
-lru = "0.7.2"
+lru = "0.12"
 k256 = "0.13.1"
 assets-rpc = { git = "https://github.com/sora-xor/sora2-network.git" }
 assets-runtime-api = { git = "https://github.com/sora-xor/sora2-network.git" }

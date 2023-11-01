@@ -31,6 +31,7 @@
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
 
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
 use crate::ethereum::make_header;
@@ -110,7 +111,7 @@ impl Relay {
             .expect("should exist")
             .0;
 
-        let mut sent = lru::LruCache::new(50000);
+        let mut sent = lru::LruCache::new(NonZeroUsize::new(50000).unwrap());
         sent.push(finalized_block.hash, ());
 
         debug!("Latest Ethereum block {}", latest_block);
