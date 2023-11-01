@@ -33,6 +33,7 @@ use std::path::PathBuf;
 use super::error::*;
 use crate::{prelude::*, substrate::traits::KeyPair};
 use bridge_types::network_config::NetworkConfig;
+use clap::error::ErrorKind;
 use clap::*;
 
 #[derive(Clone, Debug)]
@@ -53,29 +54,29 @@ const NETWORKS: [&str; 8] = [
 ];
 
 impl Args for Network {
-    fn augment_args(app: App<'_>) -> App<'_> {
+    fn augment_args(app: Command) -> Command {
         let mut app = app;
         for network in NETWORKS.iter() {
             let mut arg = Arg::new(*network).long(network).required(false);
             if *network == "custom" {
-                arg = arg.value_name("PATH").takes_value(true);
+                arg = arg.value_name("PATH").action(ArgAction::SetTrue);
             }
             app = app.arg(arg);
         }
         app
     }
 
-    fn augment_args_for_update(app: App<'_>) -> App<'_> {
+    fn augment_args_for_update(app: Command) -> Command {
         Self::augment_args(app)
     }
 }
 
 impl FromArgMatches for Network {
-    fn from_arg_matches(matches: &ArgMatches) -> Result<Self> {
+    fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
         let mut network = None;
         let mut occurrences = 0;
         for network_name in NETWORKS.iter() {
-            if matches.is_present(network_name) {
+            if matches.contains_id(network_name) {
                 occurrences += 1;
                 if occurrences > 1 {
                     return Err(Error::raw(
@@ -92,7 +93,7 @@ impl FromArgMatches for Network {
                     "classic" => Network::Classic,
                     "mordor" => Network::Mordor,
                     "custom" => {
-                        let path = matches.value_of(network_name).expect("required value");
+                        let path: &String = matches.get_one(network_name).expect("required value");
                         Network::Custom {
                             path: PathBuf::from(path),
                         }
@@ -104,7 +105,7 @@ impl FromArgMatches for Network {
         Ok(network.unwrap_or(Network::None))
     }
 
-    fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<()> {
+    fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), Error> {
         *self = Self::from_arg_matches(matches)?;
         Ok(())
     }
@@ -136,11 +137,11 @@ impl Network {
 
 #[derive(Args, Debug, Clone)]
 pub struct SubstrateClient {
-    #[clap(long, from_global)]
+    #[clap(from_global)]
     substrate_key: Option<String>,
-    #[clap(long, from_global)]
+    #[clap(from_global)]
     substrate_key_file: Option<String>,
-    #[clap(long, from_global)]
+    #[clap(from_global)]
     substrate_url: Option<String>,
 }
 
@@ -181,11 +182,11 @@ impl SubstrateClient {
 
 #[derive(Args, Debug, Clone)]
 pub struct ParachainClient {
-    #[clap(long, from_global)]
+    #[clap(from_global)]
     parachain_key: Option<String>,
-    #[clap(long, from_global)]
+    #[clap(from_global)]
     parachain_key_file: Option<String>,
-    #[clap(long, from_global)]
+    #[clap(from_global)]
     parachain_url: Option<String>,
 }
 
@@ -226,13 +227,13 @@ impl ParachainClient {
 
 #[derive(Args, Debug, Clone)]
 pub struct EthereumClient {
-    #[clap(long, global = true, from_global)]
+    #[clap(from_global)]
     ethereum_key: Option<String>,
-    #[clap(long, global = true, from_global)]
+    #[clap(from_global)]
     ethereum_key_file: Option<String>,
-    #[clap(long, global = true, from_global)]
+    #[clap(from_global)]
     ethereum_url: Option<Url>,
-    #[clap(long, global = true, from_global)]
+    #[clap(from_global)]
     gas_metrics_path: Option<PathBuf>,
 }
 
