@@ -114,9 +114,9 @@ pub mod liberland_runtime {
 pub use config::*;
 pub mod config {
     use std::fmt::Debug;
-    use subxt::{tx::PolkadotExtrinsicParams, Config};
+    use subxt::{tx::SubstrateExtrinsicParams, Config};
 
-    pub type SoraExtrinsicParams = PolkadotExtrinsicParams<DefaultConfig>;
+    pub type LiberlandExtrinsicParams = SubstrateExtrinsicParams<DefaultConfig>;
 
     #[derive(Clone, Debug, Default, Eq, PartialEq)]
     pub struct DefaultConfig;
@@ -131,6 +131,6 @@ pub mod config {
         type Header =
             sp_runtime::generic::Header<Self::BlockNumber, sp_runtime::traits::BlakeTwo256>;
         type Signature = sp_runtime::MultiSignature;
-        type ExtrinsicParams = SoraExtrinsicParams;
+        type ExtrinsicParams = LiberlandExtrinsicParams;
     }
 }

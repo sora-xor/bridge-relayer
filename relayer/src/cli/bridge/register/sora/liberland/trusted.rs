@@ -44,8 +44,8 @@ pub(crate) struct Command {
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
-        let sub = self.sub.get_unsigned_substrate().await?;
-        let liber = self.liber.get_signed_substrate().await?;
+        let sub = self.sub.get_signed_substrate().await?;
+        let para = self.liber.get_unsigned_substrate().await?;
 
         let peers = self
             .peers
@@ -56,34 +56,33 @@ impl Command {
                 Ok(acc)
             })?;
 
-        let network_id = sub
+        let network_id = para
             .constant_fetch_or_default(
-                &mainnet_runtime::constants()
-                    .bridge_inbound_channel()
+                &parachain_runtime::constants()
+                    .substrate_bridge_inbound_channel()
                     .this_network_id(),
             )
             .context("Fetch this network id")?;
 
-        let call = liberland_runtime::runtime_types::kitchensink_runtime::RuntimeCall::BridgeDataSigner(
-            liberland_runtime::runtime_types::bridge_data_signer::pallet::Call::register_network {
+        let call = mainnet_runtime::runtime_types::framenode_runtime::RuntimeCall::BridgeDataSigner(
+            mainnet_runtime::runtime_types::bridge_data_signer::pallet::Call::register_network {
                 network_id,
                 peers: peers.clone(),
             },
         );
         info!("Submit sudo call: {call:?}");
-        let call = liberland_runtime::tx().sudo().sudo(call);
-        liber.submit_extrinsic(&call).await?;
+        let call = mainnet_runtime::tx().sudo().sudo(call);
+        sub.submit_extrinsic(&call).await?;
 
-        let call =
-        liberland_runtime::runtime_types::kitchensink_runtime::RuntimeCall::MultisigVerifier(
-            liberland_runtime::runtime_types::multisig_verifier::pallet::Call::initialize {
-                    network_id,
-                    peers,
-                },
-            );
+        let call = mainnet_runtime::runtime_types::framenode_runtime::RuntimeCall::MultisigVerifier(
+            mainnet_runtime::runtime_types::multisig_verifier::pallet::Call::initialize {
+                network_id,
+                peers,
+            },
+        );
         info!("Submit sudo call: {call:?}");
-        let call = liberland_runtime::tx().sudo().sudo(call);
-        liber.submit_extrinsic(&call).await?;
+        let call = mainnet_runtime::tx().sudo().sudo(call);
+        sub.submit_extrinsic(&call).await?;
 
         Ok(())
     }

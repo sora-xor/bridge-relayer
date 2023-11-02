@@ -36,17 +36,14 @@ use clap::*;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
-    /// Parachain to SORA relay with trusted peers
+    /// Liberland to SORA relay with trusted peers
     Trusted(trusted::Command),
-    // /// Parachain to SORA relay with BEEFY proofs
-    // BEEFY(beefy::Command),
 }
 
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
             Commands::Trusted(cmd) => cmd.run().await,
-            // Commands::BEEFY(cmd) => cmd.run().await,
         }
     }
 }
