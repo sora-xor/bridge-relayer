@@ -12,5 +12,5 @@
 	branch = add_generic_substrate_app
 [submodule "liberland-gen/liberland_substrate"]
 	path = liberland-gen/liberland_substrate
-	url = https://github.com/sora-xor/liberland_substrate
+	url = https://github.com/sora-xor/liberland_substrate.git
 	branch = feature/dops-2837
