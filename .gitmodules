@@ -9,8 +9,8 @@
 [submodule "substrate-gen/sora2-network"]
 	path = substrate-gen/sora2-network
 	url = https://github.com/sora-xor/sora2-network.git
-	branch = refactor/mv-relayer
+	branch = add_generic_substrate_app
 [submodule "liberland-gen/liberland_substrate"]
 	path = liberland-gen/liberland_substrate
-	url = https://github.com/N1ghtStorm/liberland_substrate.git
-	branch = add_sora_bridge
+	url = https://github.com/sora-xor/liberland_substrate
+	branch = feature/dops-2837
