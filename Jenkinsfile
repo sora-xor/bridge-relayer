@@ -6,6 +6,7 @@ def pipeline = new org.rust.AppPipeline(steps: this,
       appImageName: 'docker.soramitsu.co.jp/sora2/bridge-relayer',
       pushTags: ['liberland':'bridge-sora-liberland'],
       buildTestCmds: ['housekeeping/build.sh'],
-      cargoClippyCmds: []
+      cargoClippyCmds: [],
+      buildArtifacts: "target/release/bridge-relayer.d"
 )
 pipeline.runPipeline()
