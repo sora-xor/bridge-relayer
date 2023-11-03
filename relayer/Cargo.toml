@@ -44,8 +44,8 @@ sha2 = "0.10.0"
 sha1 = "0.6.0"
 ethereum-types = { version = "0.14.0", features = ["serialize"] }
 rayon = "1.5.1"
-serde = { version = "1.0.131", features = ["derive"] }
-serde_json = "1.0.73"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 sp-beefy = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 beefy-merkle-tree = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 pallet-beefy-mmr = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
