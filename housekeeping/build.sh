@@ -1,3 +1,3 @@
 #!/bin/bash
 set -e
-cargo build
+cargo b -r
