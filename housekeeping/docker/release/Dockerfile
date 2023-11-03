@@ -16,4 +16,4 @@ USER substrate
 
 COPY ./target/release/bridge-relayer ./bridge-relayer
 
-ENTRYPOINT ["framenode"]
+ENTRYPOINT ["bridge-relayer"]
