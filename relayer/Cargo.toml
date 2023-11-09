@@ -34,7 +34,7 @@ triehash = "0.8.4"
 eth_trie = "0.4.0"
 keccak-hasher = "0.16.0"
 hex = "0.4.3"
-hex-literal = "0.3.4"
+hex-literal = "0.4.1"
 futures = "0.3.17"
 ethash = { git = "https://github.com/sora-xor/ethash.git", branch = "sora-v1.6.0", default-features = false }
 log = "0.4.14"

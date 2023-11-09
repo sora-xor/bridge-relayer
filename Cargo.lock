@@ -402,7 +402,7 @@ dependencies = [
  "common",
  "frame-support",
  "frame-system",
- "hex-literal 0.4.1",
+ "hex-literal",
  "orml-currencies",
  "orml-tokens",
  "orml-traits",
@@ -902,7 +902,7 @@ dependencies = [
  "ethers-core",
  "futures",
  "hex",
- "hex-literal 0.3.4",
+ "hex-literal",
  "http",
  "jsonrpsee",
  "k256 0.13.1",
@@ -947,7 +947,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "getrandom 0.2.10",
- "hex-literal 0.4.1",
+ "hex-literal",
  "libsecp256k1",
  "orml-traits",
  "parity-bytes",
@@ -1291,7 +1291,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex",
- "hex-literal 0.4.1",
+ "hex-literal",
  "libsecp256k1",
  "num-traits",
  "orml-currencies",
@@ -2257,7 +2257,7 @@ dependencies = [
  "ethereum-types",
  "frame-support",
  "frame-system",
- "hex-literal 0.4.1",
+ "hex-literal",
  "jsonrpc-core",
  "libsecp256k1",
  "once_cell",
@@ -3357,12 +3357,6 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-
-[[package]]
-name = "hex-literal"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
 
 [[package]]
 name = "hex-literal"
