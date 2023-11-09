@@ -3283,6 +3283,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
 
 [[package]]
+name = "hash-db"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e7d7786361d7425ae2fe4f9e407eb0efaa0840f5212d109cc018c40c35c6ab4"
+
+[[package]]
 name = "hash256-std-hasher"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4010,11 +4016,11 @@ dependencies = [
 
 [[package]]
 name = "keccak-hasher"
-version = "0.15.3"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "711adba9940a039f4374fc5724c0a5eaca84a2d558cce62256bfe26f0dbef05e"
+checksum = "19ea4653859ca2266a86419d3f592d3f22e7a854b482f99180d2498507902048"
 dependencies = [
- "hash-db",
+ "hash-db 0.16.0",
  "hash256-std-hasher",
  "tiny-keccak",
 ]
@@ -4804,7 +4810,7 @@ version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e0c7cba9ce19ac7ffd2053ac9f49843bbd3f4318feedfd74e85c19d5fb0ba66"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2",
  "hashbrown 0.12.3",
 ]
 
@@ -7838,7 +7844,7 @@ name = "sp-api"
 version = "4.0.0-dev"
 source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#b12c8d200054c92586ec33f5dfc5d0e109958004"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2",
  "log",
  "parity-scale-codec",
  "sp-api-proc-macro",
@@ -7967,7 +7973,7 @@ dependencies = [
  "dyn-clonable",
  "ed25519-zebra",
  "futures",
- "hash-db",
+ "hash-db 0.15.2",
  "hash256-std-hasher",
  "impl-serde",
  "lazy_static",
@@ -8276,7 +8282,7 @@ name = "sp-state-machine"
 version = "0.13.0"
 source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#b12c8d200054c92586ec33f5dfc5d0e109958004"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -8342,7 +8348,7 @@ version = "7.0.0"
 source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#b12c8d200054c92586ec33f5dfc5d0e109958004"
 dependencies = [
  "ahash 0.8.6",
- "hash-db",
+ "hash-db 0.15.2",
  "hashbrown 0.12.3",
  "lazy_static",
  "memory-db",
@@ -9177,7 +9183,7 @@ version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "004e1e8f92535694b4cb1444dc5a8073ecf0815e3357f729638b9f8fc4062908"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2",
  "hashbrown 0.12.3",
  "log",
  "rustc-hex",
@@ -9190,7 +9196,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a36c5ca3911ed3c9a5416ee6c679042064b93fc637ded67e25f92e68d783891"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2",
 ]
 
 [[package]]
@@ -9199,7 +9205,7 @@ version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1631b201eb031b563d2e85ca18ec8092508e262a3196ce9bd10a67ec87b9f5c"
 dependencies = [
- "hash-db",
+ "hash-db 0.15.2",
  "rlp",
 ]
 
