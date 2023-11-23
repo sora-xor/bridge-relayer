@@ -14,6 +14,6 @@ RUN mkdir /chain && \
     chown 10000:10000 /chain
 USER substrate
 
-COPY ./target/release/bridge-relayer ./bridge-relayer
+COPY ./target/release/bridge-relayer ./relayer
 
-ENTRYPOINT ["bridge-relayer"]
+ENTRYPOINT ["relayer"]
