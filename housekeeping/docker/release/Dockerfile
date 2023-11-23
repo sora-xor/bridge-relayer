@@ -7,11 +7,6 @@ RUN apt-get update && \
     apt-get clean && \
     find /var/lib/apt/lists/ -type f -not -name lock -delete
 
-RUN useradd substrate -u 10000
-RUN mkdir /chain && \
-    chown 10000:10000 /chain
-USER substrate
-
-COPY ./target/release/bridge-relayer ./relayer
+COPY ./target/release/bridge-relayer /usr/local/bin/relayer
 
 ENTRYPOINT ["relayer"]
