@@ -4,7 +4,7 @@ def pipeline = new org.rust.AppPipeline(steps: this,
       initSubmodules: true,
       envImageName: 'docker.soramitsu.co.jp/sora2/env:rust-1.73.0',
       appImageName: 'docker.soramitsu.co.jp/sora2/bridge-relayer',
-      pushTags: ['master':'latest','duty/build-relayer': 'test-build'],
+      pushTags: ['master':'latest'],
       buildTestCmds: ['housekeeping/build.sh'],
       cargoClippyCmds: [],
       buildArtifacts: "target/release/bridge-relayer.d"
