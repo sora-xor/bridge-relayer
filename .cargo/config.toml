@@ -1,3 +1,0 @@
-[env]
-SORA2_SUBSTRATE_METADATA_SCALE_URL = "https://github.com/sora-xor/sora2-network/raw/848b4f39774bb9e344364283bf1201eee6ce432b/substrate-gen/src/bytes/metadata.scale"
-SORA2_PARACHAIN_METADATA_SCALE_URL = "https://github.com/sora-xor/sora2-parachain/raw/develop/parachain-gen/src/bytes/parachain_metadata.scale"

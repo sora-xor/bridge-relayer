@@ -376,10 +376,11 @@ impl<T: ConfigExt> UnsignedClient<T> {
             address.entry_name(),
             hash
         );
+        let address = Unvalidated(address);
         let res = self
             .api()
             .storage()
-            .fetch(address, Some(hash.into()))
+            .fetch(&address, Some(hash.into()))
             .await
             .context(format!(
                 "Fetch storage {}::{} at hash {:?}",
@@ -406,10 +407,11 @@ impl<T: ConfigExt> UnsignedClient<T> {
             address.entry_name(),
             hash
         );
+        let address = Unvalidated(address);
         let res = self
             .api()
             .storage()
-            .fetch_or_default(address, Some(hash.into()))
+            .fetch_or_default(&address, Some(hash.into()))
             .await
             .context(format!(
                 "Fetch storage {}::{} at hash {:?}",
@@ -427,7 +429,8 @@ impl<T: ConfigExt> UnsignedClient<T> {
     where
         Address: ConstantAddress,
     {
-        let res = self.api().constants().at(address)?;
+        let address = Unvalidated(address);
+        let res = self.api().constants().at(&address)?;
         Ok(res)
     }
 
@@ -447,7 +450,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         } else {
             debug!("Submitting extrinsic without validation data");
         }
-        let xt = UnvalidatedTxPayload(xt);
+        let xt = Unvalidated(xt);
         let res = self
             .api()
             .tx()
@@ -516,7 +519,7 @@ impl<T: ConfigExt> SignedClient<T> {
             debug!("Submitting extrinsic without validation data");
         }
         // Metadata validation often works incorrectly, so we turn it off for now
-        let xt = UnvalidatedTxPayload(xt);
+        let xt = Unvalidated(xt);
         let res = self
             .api()
             .tx()

@@ -2,10 +2,6 @@
 name = "parachain-gen"
 version = "0.1.0"
 edition = "2021"
-build = "build.rs"
-
-[build-dependencies]
-reqwest = { version = "0.11.2", features = ["blocking"] }
 
 [dependencies]
 common = { git = "https://github.com/sora-xor/sora2-network.git" }
@@ -25,4 +21,3 @@ async-trait = "0.1.49"
 serde = { version = "1.0.193", features = ["derive"] }
 bridge-types = { git = "https://github.com/sora-xor/sora2-common.git" }
 beefy-light-client = { git = "https://github.com/sora-xor/sora2-common.git", default-features = false }
-
