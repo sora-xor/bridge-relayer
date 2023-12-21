@@ -32,6 +32,9 @@ pub struct ParachainConfig;
 #[derive(Clone, Copy, Debug)]
 pub struct MainnetConfig;
 
+#[derive(Clone, Copy, Debug)]
+pub struct LiberlandConfig;
+
 pub trait ConfigExt: Clone + core::fmt::Debug {
     type Config: subxt::Config + Clone;
     type Event: Decode + core::fmt::Debug + Send + Sync + 'static;
@@ -167,6 +170,18 @@ impl ConfigExt for ParachainConfig {
 impl ConfigExt for MainnetConfig {
     type Config = substrate_gen::DefaultConfig;
     type Event = mainnet_runtime::Event;
+    type BlockNumber = u32;
+    type Hash = H256;
+    type Signer = subxt::tx::PairSigner<Self::Config, KeyPair>;
+
+    fn average_block_time() -> Duration {
+        Duration::from_secs(6)
+    }
+}
+
+impl ConfigExt for LiberlandConfig {
+    type Config = liberland_gen::DefaultConfig;
+    type Event = liberland_runtime::Event;
     type BlockNumber = u32;
     type Hash = H256;
     type Signer = subxt::tx::PairSigner<Self::Config, KeyPair>;
@@ -340,6 +355,90 @@ impl SenderConfig for MainnetConfig {
         signature: ecdsa::Signature,
     ) -> StaticTxPayload<Self::SubmitSignature> {
         mainnet_runtime::tx()
+            .bridge_data_signer()
+            .approve(network_id, message, signature)
+    }
+}
+
+impl SenderConfig for LiberlandConfig {
+    type SubmitSignature = liberland_runtime::bridge_data_signer::calls::Approve;
+
+    fn current_session_index() -> StaticStorageAddress<DecodeStaticType<u32>, Yes, Yes, ()> {
+        liberland_runtime::storage().session().current_index()
+    }
+
+    fn network_id() -> StaticConstantAddress<DecodeStaticType<bridge_types::GenericNetworkId>> {
+        liberland_runtime::constants()
+            .substrate_bridge_outbound_channel()
+            .this_network_id()
+    }
+
+    fn latest_commitment(
+        network_id: GenericNetworkId,
+    ) -> StaticStorageAddress<DecodeStaticType<GenericCommitmentWithBlockOf<Self>>, Yes, (), Yes>
+    {
+        match network_id {
+            GenericNetworkId::Sub(network_id) => liberland_runtime::storage()
+                .substrate_bridge_outbound_channel()
+                .latest_commitment(network_id),
+            GenericNetworkId::EVM(_) => unimplemented!("Bridge from liberland to EVM network is supported"),
+            _ => unimplemented!("This storage is not supported for HASHI bridge"),
+        }
+    }
+
+    // fn latest_digest() -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
+    //     liberland_runtime::storage().leaf_provider().latest_digest()
+    // }
+
+    fn bridge_outbound_nonce(
+        network_id: GenericNetworkId,
+    ) -> StaticStorageAddress<DecodeStaticType<u64>, Yes, Yes, Yes> {
+        match network_id {
+            GenericNetworkId::Sub(network_id) => liberland_runtime::storage()
+                .substrate_bridge_outbound_channel()
+                .channel_nonces(network_id),
+            GenericNetworkId::EVM(_) => unimplemented!("Bridge from liberland to EVM network is supported"),
+            GenericNetworkId::EVMLegacy(_) => unimplemented!(),
+        }
+    }
+
+    fn current_validator_set() -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, Yes, ()>
+    {
+        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+    }
+
+    fn next_validator_set() -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, Yes, ()> {
+        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+    }
+
+    fn approvals(
+        network_id: GenericNetworkId,
+        message: H256,
+    ) -> StaticStorageAddress<
+        DecodeStaticType<BTreeMap<ecdsa::Public, ecdsa::Signature>>,
+        Yes,
+        Yes,
+        Yes,
+    > {
+        liberland_runtime::storage()
+            .bridge_data_signer()
+            .approvals(network_id, message)
+    }
+
+    fn peers(
+        network_id: GenericNetworkId,
+    ) -> StaticStorageAddress<DecodeStaticType<BTreeSet<ecdsa::Public>>, Yes, (), Yes> {
+        liberland_runtime::storage()
+            .bridge_data_signer()
+            .peers(network_id)
+    }
+
+    fn submit_signature(
+        network_id: GenericNetworkId,
+        message: H256,
+        signature: ecdsa::Signature,
+    ) -> StaticTxPayload<Self::SubmitSignature> {
+        liberland_runtime::tx()
             .bridge_data_signer()
             .approve(network_id, message, signature)
     }
@@ -542,3 +641,105 @@ impl ReceiverConfig for ParachainConfig {
         }
     }
 }
+
+impl ReceiverConfig for LiberlandConfig {
+    type SubmitSignatureCommitment = ();
+
+    type SubmitMessagesCommitment =
+        liberland_runtime::substrate_bridge_inbound_channel::calls::Submit;
+
+    type MultiProof = liberland_runtime::runtime_types::multisig_verifier::Proof;
+
+    fn submit_signature_commitment(
+        _network_id: SubNetworkId,
+        _commitment: Commitment,
+        _validator_proof: ValidatorProof,
+        _latest_mmr_leaf: BeefyMMRLeaf,
+        _proof: Proof<H256>,
+    ) -> StaticTxPayload<Self::SubmitSignatureCommitment> {
+        // parachain_runtime::tx()
+        //     .beefy_light_client()
+        //     .submit_signature_commitment(
+        //         network_id,
+        //         commitment,
+        //         validator_proof,
+        //         latest_mmr_leaf,
+        //         proof,
+        //     )
+        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+    }
+
+    fn submit_messages_commitment(
+        network_id: SubNetworkId,
+        message: UnboundedGenericCommitment,
+        proof: Self::MultiProof,
+    ) -> subxt::tx::StaticTxPayload<Self::SubmitMessagesCommitment> {
+        liberland_runtime::tx()
+            .substrate_bridge_inbound_channel()
+            .submit(network_id, message, liberland_gen::liberland_runtime::runtime_types::kitchensink_runtime::impls::MultiProof::Multisig(proof))
+    }
+
+    fn current_validator_set(
+        _network_id: SubNetworkId,
+    ) -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, (), Yes> {
+        // liberland_runtime::storage()
+        //     .beefy_light_client()
+        //     .current_validator_set(network_id)
+        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+    }
+
+    fn next_validator_set(
+        _network_id: SubNetworkId,
+    ) -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, (), Yes> {
+        // liberland_runtime::storage()
+        //     .beefy_light_client()
+        //     .next_validator_set(network_id)
+        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+    }
+
+    fn latest_beefy_block(
+        _network_id: SubNetworkId,
+    ) -> StaticStorageAddress<DecodeStaticType<u64>, Yes, Yes, Yes> {
+        // liberland_runtime::storage()
+        //     .beefy_light_client()
+        //     .latest_beefy_block(network_id)
+        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+    }
+
+    fn substrate_bridge_inbound_nonce(
+        network_id: SubNetworkId,
+    ) -> StaticStorageAddress<DecodeStaticType<u64>, Yes, Yes, Yes> {
+        liberland_runtime::storage()
+            .substrate_bridge_inbound_channel()
+            .channel_nonces(network_id)
+    }
+
+    fn network_id() -> StaticConstantAddress<DecodeStaticType<bridge_types::GenericNetworkId>> {
+        liberland_runtime::constants()
+            .substrate_bridge_inbound_channel()
+            .this_network_id()
+    }
+
+    fn peers(
+        network_id: GenericNetworkId,
+    ) -> StaticStorageAddress<DecodeStaticType<BTreeSet<ecdsa::Public>>, Yes, (), Yes> {
+        liberland_runtime::storage()
+            .multisig_verifier()
+            .peer_keys(network_id)
+    }
+
+    fn beefy_proof(_proof: beefy_light_client::SubstrateBridgeMessageProof) -> Self::MultiProof {
+        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+    }
+
+    fn multisig_proof(
+        digest: AuxiliaryDigest,
+        signatures: Vec<ecdsa::Signature>,
+    ) -> Self::MultiProof {
+        liberland_runtime::runtime_types::multisig_verifier::Proof {
+            digest,
+            proof: signatures,
+        }
+    }
+}
+

@@ -28,60 +28,20 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod cli;
-mod ethereum;
-mod relay;
-mod substrate;
-use clap::Parser;
-use prelude::*;
+mod trusted;
 
-#[macro_use]
-extern crate log;
+use crate::cli::prelude::*;
+use clap::*;
 
-#[macro_use]
-extern crate anyhow;
-
-#[tokio::main]
-async fn main() -> AnyResult<()> {
-    init_log();
-    let cli = cli::Cli::parse();
-    cli.run().await.map_err(|e| {
-        error!("Relayer returned error: {:?}", e);
-        e
-    })?;
-    Ok(())
+#[derive(Debug, Subcommand)]
+pub(crate) enum Commands {
+    Trusted(trusted::Command),
 }
 
-fn init_log() {
-    if std::env::var_os("RUST_LOG").is_none() {
-        env_logger::builder().parse_filters("info").init();
-    } else {
-        env_logger::init();
+impl Commands {
+    pub async fn run(&self) -> AnyResult<()> {
+        match self {
+            Commands::Trusted(cmd) => cmd.run().await,
+        }
     }
-}
-
-pub mod prelude {
-    pub use crate::ethereum::{
-        SignedClient as EthSignedClient, UnsignedClient as EthUnsignedClient,
-    };
-    pub use crate::substrate::runtime::runtime_types as sub_types;
-    pub use crate::substrate::traits::{
-        ConfigExt, MainnetConfig, ParachainConfig, LiberlandConfig, ReceiverConfig, SenderConfig,
-    };
-    pub use crate::substrate::types::{mainnet_runtime, parachain_runtime, liberland_runtime};
-    pub use crate::substrate::{
-        event_to_string as sub_event_to_string, log_extrinsic_events as sub_log_extrinsic_events,
-        SignedClient as SubSignedClient, UnsignedClient as SubUnsignedClient,
-    };
-    pub use anyhow::{Context, Result as AnyResult};
-    pub use codec::{Decode, Encode};
-    pub use hex_literal::hex;
-    pub use http::Uri;
-    pub use serde::{Deserialize, Serialize};
-    pub use sp_core::Pair as CryptoPair;
-    pub use sp_runtime::traits::Hash;
-    pub use sp_runtime::traits::Header as HeaderT;
-    pub use substrate_gen::runtime;
-    pub use substrate_gen::runtime::runtime_types::framenode_runtime::MultiProof as VerifierMultiProof;
-    pub use url::Url;
 }

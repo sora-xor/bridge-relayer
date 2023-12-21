@@ -908,6 +908,7 @@ dependencies = [
  "k256 0.13.1",
  "keccak-hasher",
  "leaf-provider-rpc",
+ "liberland-gen",
  "log",
  "lru 0.12.1",
  "mmr-rpc",
@@ -4079,6 +4080,25 @@ name = "libc"
 version = "0.2.149"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a08173bc88b7955d1b3145aa561539096c421ac8debde8cbc3612ec635fee29b"
+
+[[package]]
+name = "liberland-gen"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "beefy-light-client",
+ "bridge-common",
+ "bridge-types",
+ "common",
+ "jsonrpsee",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-beefy",
+ "sp-core",
+ "sp-runtime",
+ "subxt",
+]
 
 [[package]]
 name = "libm"

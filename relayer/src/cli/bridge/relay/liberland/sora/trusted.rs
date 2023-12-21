@@ -28,60 +28,34 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod cli;
-mod ethereum;
-mod relay;
-mod substrate;
-use clap::Parser;
-use prelude::*;
+use sp_core::ecdsa;
 
-#[macro_use]
-extern crate log;
+use crate::cli::prelude::*;
+use crate::relay::multisig_messages::RelayBuilder;
 
-#[macro_use]
-extern crate anyhow;
-
-#[tokio::main]
-async fn main() -> AnyResult<()> {
-    init_log();
-    let cli = cli::Cli::parse();
-    cli.run().await.map_err(|e| {
-        error!("Relayer returned error: {:?}", e);
-        e
-    })?;
-    Ok(())
+#[derive(Args, Clone, Debug)]
+pub(crate) struct Command {
+    #[clap(flatten)]
+    sub: SubstrateClient,
+    #[clap(flatten)]
+    liber: LiberlandClient,
+    #[clap(long)]
+    signer: String,
 }
 
-fn init_log() {
-    if std::env::var_os("RUST_LOG").is_none() {
-        env_logger::builder().parse_filters("info").init();
-    } else {
-        env_logger::init();
+impl Command {
+    pub(super) async fn run(&self) -> AnyResult<()> {
+        let sender = self.liber.get_unsigned_substrate().await?;
+        let receiver = self.sub.get_unsigned_substrate().await?;
+        let signer = ecdsa::Pair::from_string(&self.signer, None)?;
+        let messages_relay = RelayBuilder::new()
+            .with_sender_client(sender)
+            .with_receiver_client(receiver)
+            .with_signer(signer)
+            .build()
+            .await
+            .context("build liberland to sora relay")?;
+        messages_relay.run().await?;
+        Ok(())
     }
-}
-
-pub mod prelude {
-    pub use crate::ethereum::{
-        SignedClient as EthSignedClient, UnsignedClient as EthUnsignedClient,
-    };
-    pub use crate::substrate::runtime::runtime_types as sub_types;
-    pub use crate::substrate::traits::{
-        ConfigExt, MainnetConfig, ParachainConfig, LiberlandConfig, ReceiverConfig, SenderConfig,
-    };
-    pub use crate::substrate::types::{mainnet_runtime, parachain_runtime, liberland_runtime};
-    pub use crate::substrate::{
-        event_to_string as sub_event_to_string, log_extrinsic_events as sub_log_extrinsic_events,
-        SignedClient as SubSignedClient, UnsignedClient as SubUnsignedClient,
-    };
-    pub use anyhow::{Context, Result as AnyResult};
-    pub use codec::{Decode, Encode};
-    pub use hex_literal::hex;
-    pub use http::Uri;
-    pub use serde::{Deserialize, Serialize};
-    pub use sp_core::Pair as CryptoPair;
-    pub use sp_runtime::traits::Hash;
-    pub use sp_runtime::traits::Header as HeaderT;
-    pub use substrate_gen::runtime;
-    pub use substrate_gen::runtime::runtime_types::framenode_runtime::MultiProof as VerifierMultiProof;
-    pub use url::Url;
 }

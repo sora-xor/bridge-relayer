@@ -33,6 +33,7 @@
 mod evm;
 mod parachain;
 mod sora;
+mod liberland;
 
 use crate::cli::prelude::*;
 use clap::*;
@@ -48,6 +49,9 @@ pub(crate) enum Commands {
     /// Relay commands from parachain to another networks
     #[clap(subcommand)]
     Parachain(parachain::Commands),
+    /// Relay commands from liberland to another networks
+    #[clap(subcommand)]
+    Liberland(liberland::Commands),
 }
 
 impl Commands {
@@ -56,6 +60,7 @@ impl Commands {
             Commands::EVM(cmd) => cmd.run().await,
             Commands::Sora(cmd) => cmd.run().await,
             Commands::Parachain(cmd) => cmd.run().await,
+            Commands::Liberland(cmd) => cmd.run().await,
         }
     }
 }
