@@ -27,6 +27,7 @@
 // OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#![allow(clippy::too_many_arguments)]
 
 pub type MaxU32 = sp_runtime::traits::ConstU32<{ core::u32::MAX }>;
 pub type UnboundedBridgeMessage = bridge_types::substrate::BridgeMessage<MaxU32>;
@@ -38,7 +39,7 @@ pub type UnboundedGenericCommitmentWithBlock<BlockNumber> =
     runtime_metadata_path = "bytes/metadata.scale",
     derive_for_all_types = "Clone"
 )]
-pub mod parachain_runtime {
+pub mod liberland_runtime {
     #[subxt(substitute_type = "bridge_types::substrate::BridgeMessage")]
     use crate::UnboundedBridgeMessage;
     #[subxt(substitute_type = "bridge_types::GenericCommitment")]
@@ -114,9 +115,9 @@ pub mod parachain_runtime {
 pub use config::*;
 pub mod config {
     use std::fmt::Debug;
-    use subxt::{tx::PolkadotExtrinsicParams, Config};
+    use subxt::{tx::SubstrateExtrinsicParams, Config};
 
-    pub type SoraExtrinsicParams = PolkadotExtrinsicParams<DefaultConfig>;
+    pub type LiberlandExtrinsicParams = SubstrateExtrinsicParams<DefaultConfig>;
 
     #[derive(Clone, Debug, Default, Eq, PartialEq)]
     pub struct DefaultConfig;
@@ -131,6 +132,6 @@ pub mod config {
         type Header =
             sp_runtime::generic::Header<Self::BlockNumber, sp_runtime::traits::BlakeTwo256>;
         type Signature = sp_runtime::MultiSignature;
-        type ExtrinsicParams = SoraExtrinsicParams;
+        type ExtrinsicParams = LiberlandExtrinsicParams;
     }
 }
