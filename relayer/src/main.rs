@@ -66,9 +66,9 @@ pub mod prelude {
     };
     pub use crate::substrate::runtime::runtime_types as sub_types;
     pub use crate::substrate::traits::{
-        ConfigExt, MainnetConfig, ParachainConfig, LiberlandConfig, ReceiverConfig, SenderConfig,
+        ConfigExt, LiberlandConfig, MainnetConfig, ParachainConfig, ReceiverConfig, SenderConfig,
     };
-    pub use crate::substrate::types::{mainnet_runtime, parachain_runtime, liberland_runtime};
+    pub use crate::substrate::types::{liberland_runtime, mainnet_runtime, parachain_runtime};
     pub use crate::substrate::{
         event_to_string as sub_event_to_string, log_extrinsic_events as sub_log_extrinsic_events,
         SignedClient as SubSignedClient, UnsignedClient as SubUnsignedClient,

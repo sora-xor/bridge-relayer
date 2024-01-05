@@ -31,9 +31,9 @@
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
 mod evm;
+mod liberland;
 mod parachain;
 mod sora;
-mod liberland;
 
 use crate::cli::prelude::*;
 use clap::*;

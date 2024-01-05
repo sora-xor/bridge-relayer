@@ -8,7 +8,10 @@ use bridge_common::{
     beefy_types::{BeefyMMRLeaf, Commitment, ValidatorProof, ValidatorSet},
     simplified_proof::Proof,
 };
-use bridge_types::{types::{AuxiliaryDigest, AuxiliaryDigestItem}, GenericNetworkId, SubNetworkId, H256};
+use bridge_types::{
+    types::{AuxiliaryDigest, AuxiliaryDigestItem},
+    GenericNetworkId, SubNetworkId, H256,
+};
 use sp_core::ecdsa;
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, Member},
@@ -81,7 +84,8 @@ pub trait SenderConfig: ConfigExt + 'static {
         network_id: GenericNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<GenericCommitmentWithBlockOf<Self>>, Yes, (), Yes>;
 
-    fn latest_digest() -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()>;
+    fn latest_digest(
+    ) -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()>;
 
     fn bridge_outbound_nonce(
         network_id: GenericNetworkId,
@@ -218,7 +222,8 @@ impl SenderConfig for ParachainConfig {
         }
     }
 
-    fn latest_digest() -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
+    fn latest_digest(
+    ) -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
         parachain_runtime::storage().leaf_provider().latest_digest()
     }
 
@@ -308,7 +313,8 @@ impl SenderConfig for MainnetConfig {
         }
     }
 
-    fn latest_digest() -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
+    fn latest_digest(
+    ) -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
         mainnet_runtime::storage().leaf_provider().latest_digest()
     }
 
@@ -391,12 +397,15 @@ impl SenderConfig for LiberlandConfig {
             GenericNetworkId::Sub(network_id) => liberland_runtime::storage()
                 .substrate_bridge_outbound_channel()
                 .latest_commitment(network_id),
-            GenericNetworkId::EVM(_) => unimplemented!("Bridge from liberland to EVM network is supported"),
+            GenericNetworkId::EVM(_) => {
+                unimplemented!("Bridge from liberland to EVM network is supported")
+            }
             _ => unimplemented!("This storage is not supported for HASHI bridge"),
         }
     }
 
-    fn latest_digest() -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
+    fn latest_digest(
+    ) -> StaticStorageAddress<DecodeStaticType<Vec<AuxiliaryDigestItem>>, Yes, (), ()> {
         liberland_runtime::storage().leaf_provider().latest_digest()
     }
 
@@ -407,7 +416,9 @@ impl SenderConfig for LiberlandConfig {
             GenericNetworkId::Sub(network_id) => liberland_runtime::storage()
                 .substrate_bridge_outbound_channel()
                 .channel_nonces(network_id),
-            GenericNetworkId::EVM(_) => unimplemented!("Bridge from liberland to EVM network is supported"),
+            GenericNetworkId::EVM(_) => {
+                unimplemented!("Bridge from liberland to EVM network is supported")
+            }
             GenericNetworkId::EVMLegacy(_) => unimplemented!(),
         }
     }
@@ -667,15 +678,6 @@ impl ReceiverConfig for LiberlandConfig {
         _latest_mmr_leaf: BeefyMMRLeaf,
         _proof: Proof<H256>,
     ) -> StaticTxPayload<Self::SubmitSignatureCommitment> {
-        // parachain_runtime::tx()
-        //     .beefy_light_client()
-        //     .submit_signature_commitment(
-        //         network_id,
-        //         commitment,
-        //         validator_proof,
-        //         latest_mmr_leaf,
-        //         proof,
-        //     )
         unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
     }
 
@@ -692,27 +694,18 @@ impl ReceiverConfig for LiberlandConfig {
     fn current_validator_set(
         _network_id: SubNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, (), Yes> {
-        // liberland_runtime::storage()
-        //     .beefy_light_client()
-        //     .current_validator_set(network_id)
         unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
     }
 
     fn next_validator_set(
         _network_id: SubNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, (), Yes> {
-        // liberland_runtime::storage()
-        //     .beefy_light_client()
-        //     .next_validator_set(network_id)
         unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
     }
 
     fn latest_beefy_block(
         _network_id: SubNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<u64>, Yes, Yes, Yes> {
-        // liberland_runtime::storage()
-        //     .beefy_light_client()
-        //     .latest_beefy_block(network_id)
         unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
     }
 
@@ -752,4 +745,3 @@ impl ReceiverConfig for LiberlandConfig {
         }
     }
 }
-

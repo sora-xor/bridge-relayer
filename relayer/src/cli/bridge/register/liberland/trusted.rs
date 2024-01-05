@@ -75,8 +75,8 @@ impl Command {
         liber.submit_extrinsic(&call).await?;
 
         let call =
-        liberland_runtime::runtime_types::kitchensink_runtime::RuntimeCall::MultisigVerifier(
-            liberland_runtime::runtime_types::multisig_verifier::pallet::Call::initialize {
+            liberland_runtime::runtime_types::kitchensink_runtime::RuntimeCall::MultisigVerifier(
+                liberland_runtime::runtime_types::multisig_verifier::pallet::Call::initialize {
                     network_id,
                     peers,
                 },

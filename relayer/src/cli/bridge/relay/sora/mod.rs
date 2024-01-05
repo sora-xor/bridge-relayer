@@ -29,9 +29,9 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod evm;
+mod liberland;
 mod parachain;
 mod sora;
-mod liberland;
 
 use crate::cli::prelude::*;
 use clap::*;
