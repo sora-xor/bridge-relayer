@@ -33,15 +33,11 @@ use bridge_types::types::LeafExtraData;
 use bridge_types::H256;
 use codec::IoReader;
 use common::{AssetId32, PredefinedAssetId};
-pub use parachain_gen::{parachain_runtime, SoraExtrinsicParams as ParachainExtrinsicParams};
+pub use parachain_gen::parachain_runtime;
 use sp_core::Bytes;
 use sp_mmr_primitives::Proof;
-pub use substrate_gen::{
-    runtime as mainnet_runtime, SoraExtrinsicParams as MainnetExtrinsicParams,
-};
+pub use substrate_gen::runtime as mainnet_runtime;
 use subxt::constants::ConstantAddress;
-pub use subxt::rpc::ChainBlock;
-pub use subxt::rpc::Subscription;
 use subxt::storage::StorageAddress;
 use subxt::tx::TxPayload;
 use subxt::Config as SubxtConfig;
