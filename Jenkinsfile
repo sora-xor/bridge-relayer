@@ -10,6 +10,6 @@ def pipeline = new org.rust.AppPipeline(steps: this,
       cargoClippyCmds: [],
       sonarProjectKey: 'sora:bridge-relayer',
       sonarProjectName: 'bridge-relayer',
-      dojoProductType: 'polkaswap'
+      dojoProductType: 'sora'
 )
 pipeline.runPipeline()
