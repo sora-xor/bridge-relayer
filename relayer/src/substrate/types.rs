@@ -33,14 +33,12 @@ use bridge_types::types::LeafExtraData;
 use bridge_types::H256;
 use codec::IoReader;
 use common::{AssetId32, PredefinedAssetId};
-pub use parachain_gen::{parachain_runtime, SoraExtrinsicParams as ParachainExtrinsicParams};
+pub use parachain_gen::parachain_runtime;
 use sp_core::Bytes;
 use sp_mmr_primitives::Proof;
-pub use substrate_gen::{
-    runtime as mainnet_runtime, SoraExtrinsicParams as MainnetExtrinsicParams,
-};
-pub use subxt::rpc::ChainBlock;
-pub use subxt::rpc::Subscription;
+pub use substrate_gen::runtime as mainnet_runtime;
+use subxt::constants::ConstantAddress;
+use subxt::storage::StorageAddress;
 use subxt::tx::TxPayload;
 use subxt::Config as SubxtConfig;
 use subxt::OnlineClient;
@@ -119,14 +117,49 @@ impl From<H256> for BlockNumberOrHash {
     }
 }
 
-pub struct UnvalidatedTxPayload<'a, P: TxPayload>(pub &'a P);
+pub struct Unvalidated<'a, P>(pub &'a P);
 
-impl<'a, P: TxPayload> TxPayload for UnvalidatedTxPayload<'a, P> {
+impl<'a, P: TxPayload> TxPayload for Unvalidated<'a, P> {
     fn encode_call_data_to(
         &self,
         metadata: &subxt::Metadata,
         out: &mut Vec<u8>,
     ) -> Result<(), subxt::Error> {
         self.0.encode_call_data_to(metadata, out)
+    }
+}
+
+impl<'a, P: StorageAddress> StorageAddress for Unvalidated<'a, P> {
+    type Target = P::Target;
+    type IsFetchable = P::IsFetchable;
+    type IsDefaultable = P::IsDefaultable;
+    type IsIterable = P::IsIterable;
+
+    fn pallet_name(&self) -> &str {
+        self.0.pallet_name()
+    }
+
+    fn entry_name(&self) -> &str {
+        self.0.entry_name()
+    }
+
+    fn append_entry_bytes(
+        &self,
+        metadata: &subxt::Metadata,
+        bytes: &mut Vec<u8>,
+    ) -> Result<(), subxt::Error> {
+        self.0.append_entry_bytes(metadata, bytes)
+    }
+}
+
+impl<'a, P: ConstantAddress> ConstantAddress for Unvalidated<'a, P> {
+    type Target = P::Target;
+
+    fn pallet_name(&self) -> &str {
+        self.0.pallet_name()
+    }
+
+    fn constant_name(&self) -> &str {
+        self.0.constant_name()
     }
 }
