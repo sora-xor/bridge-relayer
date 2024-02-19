@@ -12,5 +12,9 @@ test() {
     cargo test
 }
 
-test
-build
+# build func
+if [ "$(type -t $1)" = "function" ]; then
+    "$1"
+else
+    echo "Func '$1' is not exists in this workflow. Skipping."
+fi
