@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+
 build() {
     cargo b -r
 }
@@ -10,3 +11,6 @@ test() {
     export LLVM_PROFILE_FILE="sora2-%p-%m.profraw"
     cargo test
 }
+
+test
+build
