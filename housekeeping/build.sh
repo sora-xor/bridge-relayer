@@ -1,15 +1,17 @@
 #!/bin/bash
 set -e
 
-build() {
-    cargo b -r
-}
-
 test() {
+    printf "⚡️ Running tests\n"
     export RUSTFLAGS="-Cinstrument-coverage"
     export SKIP_WASM_BUILD=1    
     export LLVM_PROFILE_FILE="sora2-%p-%m.profraw"
     cargo test
+}
+
+build() {
+    printf "⚡️ Running build\n"
+    cargo b -r
 }
 
 # build func
