@@ -1,4 +1,4 @@
-FROM debian:bullseye-20231120-slim
+FROM debian:bullseye-20240211-slim
 
 # Install dependencies
 RUN apt-get update && \
@@ -12,5 +12,3 @@ RUN apt-get update && \
 USER substrate
 
 COPY ./target/release/bridge-relayer /usr/local/bin/relayer
-
-ENTRYPOINT ["relayer"]
