@@ -4086,7 +4086,6 @@ name = "liberland-gen"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "beefy-light-client",
  "bridge-common",
  "bridge-types",
  "common",
@@ -4094,7 +4093,6 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-beefy",
  "sp-core",
  "sp-runtime",
  "subxt",
