@@ -8,7 +8,7 @@ def pipeline = new org.rust.AppPipeline(steps: this,
       buildTestCmds: 'housekeeping/build.sh',
       codeCoverageCommand: './housekeeping/coverage.sh',
       clippyLinter: false,
-      buildArtifacts: "target/release/bridge-relayer.d"
+      buildArtifacts: "target/release/bridge-relayer.d",
       sonarProjectKey: 'sora:bridge-relayer',
       sonarProjectName: 'bridge-relayer',
       dojoProductType: 'sora'
