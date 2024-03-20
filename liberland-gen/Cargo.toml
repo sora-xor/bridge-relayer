@@ -6,12 +6,9 @@ edition = "2021"
 [dependencies]
 common = { git = "https://github.com/sora-xor/sora2-network.git" }
 subxt = { version = "0.25.0" }
-# subxt = { version = "0.34.0" }
 codec = { package = "parity-scale-codec", version = "3", features = ["derive"] }
 scale-info = { version = "2", features = ["derive"] }
-# sp-beefy = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 bridge-common = { git = "https://github.com/sora-xor/sora2-common.git", default-features = false }
-# bridge-common = { git = "https://github.com/sora-xor/sora2-common.git", branch = "polkadotsdk-lib-1.1.0", default-features = false }
 jsonrpsee = { version = "0.16.2", features = [
     "macros",
     "ws-client",
@@ -19,11 +16,14 @@ jsonrpsee = { version = "0.16.2", features = [
 ] }
 sp-core = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38", default-features = false }
 sp-runtime = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38", default-features = false }
-# sp-core = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.1.0", default-features = false }
-# sp-runtime = { git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.1.0", default-features = false }
 
 async-trait = "0.1.49"
 serde = { version = "1.0.193", features = ["derive"] }
 bridge-types = { git = "https://github.com/sora-xor/sora2-common.git" }
-# bridge-types = { git = "https://github.com/sora-xor/sora2-common.git", branch = "polkadotsdk-lib-1.1.0", default-features = false  }
-# beefy-light-client = { git = "https://github.com/sora-xor/sora2-common.git", default-features = false }
+
+
+# [build-dependencies]
+# kitchensink-runtime = { git = "https://github.com/N1ghtStorm/liberland_substrate", branch = "sora_bridge_1.1.0" }
+# kitchensink-runtime = { git = "https://github.com/N1ghtStorm/liberland_substrate" }
+# sp-core = { tag = "polkadot-v1.1.0", git = "https://github.com/paritytech/polkadot-sdk", default-features = false }
+
