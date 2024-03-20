@@ -398,7 +398,7 @@ impl SenderConfig for LiberlandConfig {
                 .substrate_bridge_outbound_channel()
                 .latest_commitment(network_id),
             GenericNetworkId::EVM(_) => {
-                unimplemented!("Bridge from liberland to EVM network is supported")
+                unimplemented!("Bridge from liberland to EVM network is not supported")
             }
             _ => unimplemented!("This storage is not supported for HASHI bridge"),
         }
@@ -417,7 +417,7 @@ impl SenderConfig for LiberlandConfig {
                 .substrate_bridge_outbound_channel()
                 .channel_nonces(network_id),
             GenericNetworkId::EVM(_) => {
-                unimplemented!("Bridge from liberland to EVM network is supported")
+                unimplemented!("Bridge from liberland to EVM network is not supported")
             }
             GenericNetworkId::EVMLegacy(_) => unimplemented!(),
         }
@@ -425,11 +425,11 @@ impl SenderConfig for LiberlandConfig {
 
     fn current_validator_set() -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, Yes, ()>
     {
-        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+        unimplemented!("BEEFY bridge not is implemented for Liberland")
     }
 
     fn next_validator_set() -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, Yes, ()> {
-        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+        unimplemented!("BEEFY bridge not is implemented for Liberland")
     }
 
     fn approvals(
@@ -678,7 +678,7 @@ impl ReceiverConfig for LiberlandConfig {
         _latest_mmr_leaf: BeefyMMRLeaf,
         _proof: Proof<H256>,
     ) -> StaticTxPayload<Self::SubmitSignatureCommitment> {
-        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+        unimplemented!("BEEFY bridge not is implemented for Liberland")
     }
 
     fn submit_messages_commitment(
@@ -694,19 +694,19 @@ impl ReceiverConfig for LiberlandConfig {
     fn current_validator_set(
         _network_id: SubNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, (), Yes> {
-        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+        unimplemented!("BEEFY bridge not is implemented for Liberland")
     }
 
     fn next_validator_set(
         _network_id: SubNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<ValidatorSet>, Yes, (), Yes> {
-        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+        unimplemented!("BEEFY bridge not is implemented for Liberland")
     }
 
     fn latest_beefy_block(
         _network_id: SubNetworkId,
     ) -> StaticStorageAddress<DecodeStaticType<u64>, Yes, Yes, Yes> {
-        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+        unimplemented!("BEEFY bridge not is implemented for Liberland")
     }
 
     fn substrate_bridge_inbound_nonce(
@@ -732,7 +732,7 @@ impl ReceiverConfig for LiberlandConfig {
     }
 
     fn beefy_proof(_proof: beefy_light_client::SubstrateBridgeMessageProof) -> Self::MultiProof {
-        unimplemented!("BEEFY BRIDGE NOT IMPLEMANTATION FOR LIBERLAND")
+        unimplemented!("BEEFY bridge not is implemented for Liberland")
     }
 
     fn multisig_proof(
