@@ -20,10 +20,3 @@ sp-runtime = { git = "https://github.com/sora-xor/substrate.git", branch = "polk
 async-trait = "0.1.49"
 serde = { version = "1.0.193", features = ["derive"] }
 bridge-types = { git = "https://github.com/sora-xor/sora2-common.git" }
-
-
-# [build-dependencies]
-# kitchensink-runtime = { git = "https://github.com/N1ghtStorm/liberland_substrate", branch = "sora_bridge_1.1.0" }
-# kitchensink-runtime = { git = "https://github.com/N1ghtStorm/liberland_substrate" }
-# sp-core = { tag = "polkadot-v1.1.0", git = "https://github.com/paritytech/polkadot-sdk", default-features = false }
-
