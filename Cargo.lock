@@ -696,7 +696,7 @@ dependencies = [
 [[package]]
 name = "beefy-light-client"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.22#11c3d700ede2a24d84864fe5b1359b086661e1a4"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "beefy-merkle-tree",
  "bridge-common",
@@ -861,7 +861,7 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 [[package]]
 name = "bridge-common"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.22#11c3d700ede2a24d84864fe5b1359b086661e1a4"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "bitvec 1.0.1",
  "bridge-types",
@@ -938,7 +938,7 @@ dependencies = [
 [[package]]
 name = "bridge-types"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.22#11c3d700ede2a24d84864fe5b1359b086661e1a4"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "derivative",
  "ethabi 17.2.0",
@@ -1181,9 +1181,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.7"
+version = "4.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac495e00dcec98c83465d5ad66c5c4fabd652fd6686e7c6269b117e729a6f17b"
+checksum = "33e92c5c1a78c62968ec57dbc2440366a2d6e5a23faf829970ff1585dc6b18e2"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1191,9 +1191,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.4.7"
+version = "4.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c77ed9a32a62e6ca27175d00d29d05ca32e396ea1eb5fb01d8256b669cec7663"
+checksum = "f4323769dc8a61e2c39ad7dc26f6f2800524691a44d74fe3d1071a5c24db6370"
 dependencies = [
  "anstream",
  "anstyle",
@@ -4047,7 +4047,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 [[package]]
 name = "leaf-provider-rpc"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.22#11c3d700ede2a24d84864fe5b1359b086661e1a4"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "jsonrpsee",
  "leaf-provider-runtime-api",
@@ -4064,7 +4064,7 @@ dependencies = [
 [[package]]
 name = "leaf-provider-runtime-api"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.22#11c3d700ede2a24d84864fe5b1359b086661e1a4"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "bridge-types",
  "parity-scale-codec",
