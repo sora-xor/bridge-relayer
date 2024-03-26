@@ -1,5 +1,8 @@
-# bridge-relayer
-Relayer for Sora2 bridge
+<img alt="SORA logo" src="https://static.tildacdn.com/tild3664-3939-4236-b762-306663333564/sora_small.svg"/>
+
+# Overview
+
+Relayer for Sora2 bridges
 
 ### Build
 
@@ -11,11 +14,11 @@ cargo b -r
 ### Run Federated SORA -> Liberland Relayer
 
 ```sh
-RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://{LIBERLAND_ADDRESS} --liberland-key "//Relayer1" --substrate-url ws://{SORA_ADDRESS} --substrate-key "//Relayer1" bridge relay sora liberland trusted --signer {YOUR_SEED}
+RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://{LIBERLAND_ADDRESS} --liberland-key {KEY_POSTFIX} --substrate-url ws://{SORA_ADDRESS} --substrate-key {KEY_POSTFIX} bridge relay sora liberland trusted --signer {YOUR_SEED}
 ```
 
 ### Run Federated Liberland -> SORA Relayer
 
 ```sh
-RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://{LIBERLAND_ADDRESS} --liberland-key "//Relayer1" --substrate-url ws://{SORA_ADDRESS}--substrate-key "//Relayer1" bridge relay liberland sora trusted --signer {YOUR_SEED}
+RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://{LIBERLAND_ADDRESS} --liberland-key {KEY_POSTFIX} --substrate-url ws://{SORA_ADDRESS}--substrate-key {KEY_POSTFIX} bridge relay liberland sora trusted --signer {YOUR_SEED}
 ```
