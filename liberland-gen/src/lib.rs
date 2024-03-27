@@ -27,6 +27,7 @@
 // OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#![allow(clippy::too_many_arguments)]
 
 pub type MaxU32 = sp_runtime::traits::ConstU32<{ core::u32::MAX }>;
 pub type UnboundedBridgeMessage = bridge_types::substrate::BridgeMessage<MaxU32>;
@@ -38,21 +39,13 @@ pub type UnboundedGenericCommitmentWithBlock<BlockNumber> =
     runtime_metadata_path = "bytes/metadata.scale",
     derive_for_all_types = "Clone"
 )]
-pub mod parachain_runtime {
+pub mod liberland_runtime {
     #[subxt(substitute_type = "bridge_types::substrate::BridgeMessage")]
     use crate::UnboundedBridgeMessage;
     #[subxt(substitute_type = "bridge_types::GenericCommitment")]
     use crate::UnboundedGenericCommitment;
     #[subxt(substitute_type = "bridge_types::types::GenericCommitmentWithBlock")]
     use crate::UnboundedGenericCommitmentWithBlock;
-    #[subxt(substitute_type = "bridge_common::beefy_types::BeefyMMRLeaf")]
-    use ::bridge_common::beefy_types::BeefyMMRLeaf;
-    #[subxt(substitute_type = "bridge_common::beefy_types::Commitment")]
-    use ::bridge_common::beefy_types::Commitment;
-    #[subxt(substitute_type = "bridge_common::beefy_types::ValidatorProof")]
-    use ::bridge_common::beefy_types::ValidatorProof;
-    #[subxt(substitute_type = "bridge_common::beefy_types::ValidatorSet")]
-    use ::bridge_common::beefy_types::ValidatorSet;
     #[subxt(substitute_type = "bridge_common::simplified_proof::Proof")]
     use ::bridge_common::simplified_proof::Proof;
     #[subxt(substitute_type = "bridge_types::ethashproof::DoubleNodeWithMerkleProof")]
@@ -77,14 +70,6 @@ pub mod parachain_runtime {
     use ::bridge_types::HeaderId;
     #[subxt(substitute_type = "bridge_types::SubNetworkId")]
     use ::bridge_types::SubNetworkId;
-    #[subxt(substitute_type = "sp_beefy::crypto::Public")]
-    use ::sp_beefy::crypto::Public;
-    #[subxt(substitute_type = "sp_beefy::mmr::BeefyAuthoritySet")]
-    use ::sp_beefy::mmr::BeefyAuthoritySet;
-    #[subxt(substitute_type = "sp_beefy::mmr::MmrLeaf")]
-    use ::sp_beefy::mmr::MmrLeaf;
-    #[subxt(substitute_type = "sp_beefy::commitment::Commitment")]
-    use ::sp_beefy::Commitment;
     #[subxt(substitute_type = "sp_core::ecdsa::Public")]
     use ::sp_core::ecdsa::Public;
     #[subxt(substitute_type = "sp_core::ecdsa::Signature")]
@@ -101,22 +86,23 @@ pub mod parachain_runtime {
     use ::sp_runtime::MultiSignature;
     #[subxt(substitute_type = "sp_runtime::MultiSigner")]
     use ::sp_runtime::MultiSigner;
-    #[subxt(substitute_type = "sp_core::bounded::bounded_btree_map::BoundedBTreeMap")]
+
+    #[subxt(substitute_type = "bounded_collections::bounded_btree_map::BoundedBTreeMap")]
     use ::std::collections::btree_map::BTreeMap;
-    #[subxt(substitute_type = "sp_core::bounded::bounded_btree_set::BoundedBTreeSet")]
+    #[subxt(substitute_type = "bounded_collections::bounded_btree_set::BoundedBTreeSet")]
     use ::std::collections::btree_set::BTreeSet;
-    #[subxt(substitute_type = "sp_core::bounded::bounded_vec::BoundedVec")]
+    #[subxt(substitute_type = "bounded_collections::bounded_vec::BoundedVec")]
     use ::std::vec::Vec;
-    #[subxt(substitute_type = "sp_runtime::bounded::bounded_vec::BoundedVec")]
+    #[subxt(substitute_type = "bounded_collections::bounded_vec::BoundedVec")]
     use ::std::vec::Vec;
 }
 
 pub use config::*;
 pub mod config {
     use std::fmt::Debug;
-    use subxt::{tx::PolkadotExtrinsicParams, Config};
+    use subxt::{tx::SubstrateExtrinsicParams, Config};
 
-    pub type SoraExtrinsicParams = PolkadotExtrinsicParams<DefaultConfig>;
+    pub type LiberlandExtrinsicParams = SubstrateExtrinsicParams<DefaultConfig>;
 
     #[derive(Clone, Debug, Default, Eq, PartialEq)]
     pub struct DefaultConfig;
@@ -131,6 +117,6 @@ pub mod config {
         type Header =
             sp_runtime::generic::Header<Self::BlockNumber, sp_runtime::traits::BlakeTwo256>;
         type Signature = sp_runtime::MultiSignature;
-        type ExtrinsicParams = SoraExtrinsicParams;
+        type ExtrinsicParams = LiberlandExtrinsicParams;
     }
 }

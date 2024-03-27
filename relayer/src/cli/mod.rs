@@ -73,6 +73,15 @@ pub struct Cli {
     /// Parachain node endpoint
     #[clap(long, global = true)]
     parachain_url: Option<String>,
+    /// Liberland account derive URI
+    #[clap(long, global = true)]
+    liberland_key: Option<String>,
+    /// File with Liberland account derive URI
+    #[clap(long, global = true)]
+    liberland_key_file: Option<String>,
+    /// Liberland node endpoint
+    #[clap(long, global = true)]
+    liberland_url: Option<String>,
     /// Ethereum private key
     #[clap(long, global = true)]
     ethereum_key: Option<String>,
