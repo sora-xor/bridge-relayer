@@ -34,7 +34,7 @@ use bridge_types::H256;
 use codec::IoReader;
 use common::{AssetId32, PredefinedAssetId};
 pub use liberland_gen::liberland_runtime;
-pub use parachain_gen::{parachain_runtime, SoraExtrinsicParams as ParachainExtrinsicParams};
+pub use parachain_gen::parachain_runtime;
 use sp_core::Bytes;
 use sp_mmr_primitives::Proof;
 pub use substrate_gen::runtime as mainnet_runtime;
