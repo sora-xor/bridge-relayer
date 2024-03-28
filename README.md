@@ -20,7 +20,7 @@ RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-u
 Example:
 
 ```sh
-RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://localhost:10999 --liberland-key "//Relayer1" --substrate-url ws://localhost:9944 --substrate-key "//Relayer1" bridge relay sora liberland trusted --signer "some seed"
+RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://localhost:10999 --substrate-url ws://localhost:9944 bridge relay sora liberland trusted --signer "{some seed}"
 ```
 
 ### Run Federated Liberland -> SORA Relayer
@@ -32,5 +32,5 @@ RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-u
 Example:
 
 ```sh
-RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://localhost:10999 --liberland-key "//Relayer1" --substrate-url ws://localhost:9944 --substrate-key "//Relayer1" bridge relay liberland sora trusted --signer "some seed"
+RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://localhost:10999 --substrate-url ws://localhost:9944 bridge relay liberland sora trusted --signer "{some seed}"
 ```
