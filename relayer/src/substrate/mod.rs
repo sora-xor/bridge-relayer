@@ -197,9 +197,20 @@ impl<T: ConfigExt> UnsignedClient<T> {
         self.rpc()
     }
 
-    pub async fn auxiliary_digest(&self, at: Option<BlockHash<T>>) -> AnyResult<AuxiliaryDigest> {
-        let res = leaf_provider_rpc::LeafProviderAPIClient::latest_digest(self.rpc(), at).await?;
-        Ok(res.unwrap_or_default())
+    pub async fn auxiliary_digest(&self, at: Option<BlockHash<T>>) -> AnyResult<AuxiliaryDigest>
+    where
+        T: SenderConfig,
+    {
+        let Some(at) = at else {
+            return Err(anyhow::anyhow!(
+                "auxiliary_digest: Block Number is incorrect"
+            ));
+        };
+        let latest_digest = T::latest_digest();
+        let logs = self.storage_fetch(&latest_digest, at).await?;
+        Ok(AuxiliaryDigest {
+            logs: logs.unwrap_or_default(),
+        })
     }
 
     pub async fn latest_commitment<N: Into<BlockNumberOrHash>>(
