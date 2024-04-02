@@ -286,7 +286,7 @@ impl LiberlandClient {
     pub fn get_key_string(&self) -> AnyResult<String> {
         match (&self.liberland_key, &self.liberland_key_file) {
             (Some(_), Some(_)) => Err(CliError::BothKeyTypesProvided.into()),
-            (None, None) => Err(CliError::SubstrateKey.into()),
+            (None, None) => Err(CliError::LiberlandKey.into()),
             (Some(key), _) => Ok(key.clone()),
             (_, Some(key_file)) => Ok(std::fs::read_to_string(key_file)?),
         }
@@ -296,7 +296,7 @@ impl LiberlandClient {
         Ok(self
             .liberland_url
             .clone()
-            .ok_or(CliError::SubstrateEndpoint)?)
+            .ok_or(CliError::LiberlandEndpoint)?)
     }
 
     pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<LiberlandConfig>> {

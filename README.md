@@ -7,6 +7,7 @@ Relayer for Sora2 bridges
 ### Build
 
 ```sh
+git submodule update --init --recursive
 cargo b -r
 ```
 # Run Federated Relayers
