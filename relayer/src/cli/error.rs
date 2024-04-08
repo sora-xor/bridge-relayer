@@ -46,4 +46,8 @@ pub enum CliError {
     ParachainEndpoint,
     #[error("Provide parachain key via --parachain-key or --parachain-key-file")]
     ParachainKey,
+    #[error("Provide liberland endpoint via --liberland-url")]
+    LiberlandEndpoint,
+    #[error("Provide liberland key via --liberland-key or --liberland-key-file")]
+    LiberlandKey,
 }
