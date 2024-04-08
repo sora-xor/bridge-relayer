@@ -31,7 +31,6 @@
 mod app;
 mod asset;
 mod channels;
-mod ethash;
 
 use crate::cli::prelude::*;
 use clap::*;
@@ -42,8 +41,6 @@ pub(crate) enum Commands {
     App(app::Command),
     /// Register asset
     Asset(asset::Command),
-    /// Register Ethash light client
-    Ethash(ethash::Command),
     /// Register EVM channel
     Channels(channels::Command),
 }
@@ -53,7 +50,6 @@ impl Commands {
         match self {
             Commands::App(cmd) => cmd.run().await,
             Commands::Asset(cmd) => cmd.run().await,
-            Commands::Ethash(cmd) => cmd.run().await,
             Commands::Channels(cmd) => cmd.run().await,
         }
     }

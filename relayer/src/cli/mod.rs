@@ -29,10 +29,8 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod bridge;
-mod calc_dag_roots;
 mod copy_liquidity;
 mod error;
-mod fetch_ethereum_header;
 mod mint_test_token;
 mod old_bridge;
 mod subscribe_beefy;
@@ -108,8 +106,6 @@ impl Cli {
 enum Commands {
     /// Subscribe beefy to new commitments
     SubscribeBeefy(subscribe_beefy::Command),
-    /// Fetch Ethereum header
-    FetchEthereumHeader(fetch_ethereum_header::Command),
     /// Mint test token (work for tokens with mint method)
     MintTestToken(mint_test_token::Command),
     /// Operations with bridge
@@ -118,8 +114,6 @@ enum Commands {
     /// Operations with old bridge
     #[clap(subcommand)]
     OldBridge(old_bridge::Commands),
-    /// Calculate DAG roots for light client
-    CalcDagRoots(calc_dag_roots::Command),
     CopyLiquidity(copy_liquidity::Command),
 }
 
@@ -127,11 +121,9 @@ impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
             Self::SubscribeBeefy(cmd) => cmd.run().await,
-            Self::FetchEthereumHeader(cmd) => cmd.run().await,
             Self::MintTestToken(cmd) => cmd.run().await,
             Self::Bridge(cmd) => cmd.run().await,
             Self::OldBridge(cmd) => cmd.run().await,
-            Self::CalcDagRoots(cmd) => cmd.run().await,
             Self::CopyLiquidity(cmd) => cmd.run().await,
         }
     }

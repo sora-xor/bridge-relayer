@@ -30,9 +30,6 @@
 
 mod register;
 mod relay;
-mod test_transfers;
-mod transfer_to_ethereum;
-mod transfer_to_sora;
 
 use crate::cli::prelude::*;
 
@@ -44,12 +41,6 @@ pub(crate) enum Commands {
     /// Register operations for bridge
     #[clap(subcommand)]
     Register(register::Commands),
-    /// Make test transfers through bridge
-    TestTransfers(test_transfers::Command),
-    /// Transfer tokens from Ethereum to Sora
-    TransferToSora(transfer_to_sora::Command),
-    /// Transfer tokens from Sora to Ethereum
-    TransferToEthereum(transfer_to_ethereum::Command),
 }
 
 impl Commands {
@@ -57,9 +48,6 @@ impl Commands {
         match self {
             Commands::Relay(cmd) => cmd.run().await,
             Commands::Register(cmd) => cmd.run().await,
-            Commands::TestTransfers(cmd) => cmd.run().await,
-            Commands::TransferToSora(cmd) => cmd.run().await,
-            Commands::TransferToEthereum(cmd) => cmd.run().await,
         }
     }
 }

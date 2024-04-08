@@ -29,35 +29,20 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ethers::contract::abigen!(
-    InboundChannel,
-    "sora2-federated-bridge-evm-contracts/abi/InboundChannel.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    OutboundChannel,
-    "sora2-federated-bridge-evm-contracts/abi/OutboundChannel.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    BeefyLightClient,
-    "sora2-federated-bridge-evm-contracts/abi/BeefyLightClient.json",
+    ChannelHandler,
+    "sora2-federated-bridge-evm-contracts/abi/TestChannelHandler.json",
     event_derives (serde::Deserialize, serde::Serialize);
     ETHApp,
     "sora2-federated-bridge-evm-contracts/abi/ETHApp.json",
     event_derives (serde::Deserialize, serde::Serialize);
-    ERC20App,
-    "sora2-federated-bridge-evm-contracts/abi/ERC20App.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    SidechainApp,
-    "sora2-federated-bridge-evm-contracts/abi/SidechainApp.json",
+    FAApp,
+    "sora2-federated-bridge-evm-contracts/abi/FAApp.json",
     event_derives (serde::Deserialize, serde::Serialize);
     IERC20Metadata,
     "sora2-federated-bridge-evm-contracts/abi/IERC20Metadata.json",
     event_derives (serde::Deserialize, serde::Serialize);
     TestToken,
     "sora2-federated-bridge-evm-contracts/abi/TestToken.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    Bridge,
-    "sora2-federated-bridge-evm-contracts/abi/Bridge.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    Master,
-    "sora2-federated-bridge-evm-contracts/abi/Master.json",
     event_derives (serde::Deserialize, serde::Serialize);
     MigrationApp,
     "sora2-federated-bridge-evm-contracts/abi/MigrationApp.json",
