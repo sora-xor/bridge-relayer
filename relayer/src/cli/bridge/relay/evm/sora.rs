@@ -31,8 +31,6 @@
 use std::time::Duration;
 
 use crate::cli::prelude::*;
-use crate::relay::beefy_syncer::BeefySyncer;
-use crate::relay::substrate::RelayBuilder;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
@@ -40,65 +38,40 @@ pub(crate) struct Command {
     sub: SubstrateClient,
     #[clap(flatten)]
     eth: EthereumClient,
-    /// Send all Beefy commitments
-    #[clap(short, long)]
-    send_unneeded_commitments: bool,
-    /// Not send messages from Substrate to Ethereum
+    /// Signer for bridge messages
     #[clap(long)]
-    disable_message_relay: bool,
+    signer: String,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_signed_ethereum().await?;
         let sub = self.sub.get_unsigned_substrate().await?;
-        let syncer = BeefySyncer::new();
-        let network_id = eth.inner().get_chainid().await.context("fetch chain id")?;
-        let eth_app = loop {
-            let eth_app = sub
-                .storage_fetch(&runtime::storage().eth_app().addresses(&network_id), ())
+        let signer = sp_core::ecdsa::Pair::from_string(&self.signer, None)?;
+        let network_id = eth.chainid().await.context("fetch chain id")?;
+        let channel_address = loop {
+            let channel_address = sub
+                .storage_fetch(
+                    &runtime::storage()
+                        .bridge_inbound_channel()
+                        .evm_channel_addresses(&network_id),
+                    (),
+                )
                 .await?;
-            if let Some((eth_app, _, _)) = eth_app {
-                break eth_app;
+            if let Some(channel_address) = channel_address {
+                break channel_address;
             }
             debug!("Waiting for bridge to be available");
             tokio::time::sleep(Duration::from_secs(10)).await;
         };
-        let eth_app = ethereum_gen::ETHApp::new(eth_app, eth.inner());
-        let inbound_channel_address = eth_app
-            .inbound()
-            .call()
-            .await
-            .context("fetch outbound channel address")?;
-        let channel = ethereum_gen::InboundChannel::new(inbound_channel_address, eth.inner());
-        let beefy = channel
-            .beefy_light_client()
-            .call()
-            .await
-            .context("fetch beefy light client address")?;
-        let relay = RelayBuilder::new()
-            .with_substrate_client(sub.clone())
-            .with_ethereum_client(eth.clone())
-            .with_beefy_contract(beefy)
-            .with_syncer(syncer.clone())
+        let messages_relay = crate::relay::evm::sub_messages::RelayBuilder::new()
+            .with_channel_contract(channel_address)
+            .with_receiver_client(eth)
+            .with_sender_client(sub)
+            .with_signer(signer)
             .build()
-            .await
-            .context("build substrate relay")?;
-        if self.disable_message_relay {
-            relay.run(!self.send_unneeded_commitments).await?;
-        } else {
-            let messages_relay = crate::relay::substrate_messages::RelayBuilder::new()
-                .with_inbound_channel_contract(inbound_channel_address)
-                .with_receiver_client(eth)
-                .with_sender_client(sub)
-                .with_syncer(syncer)
-                .build()
-                .await?;
-            tokio::try_join!(
-                relay.run(!self.send_unneeded_commitments),
-                messages_relay.run()
-            )?;
-        }
+            .await?;
+        messages_relay.run().await?;
         Ok(())
     }
 }

@@ -29,10 +29,9 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::cli::prelude::*;
-use bridge_types::{H160, U256};
+use bridge_types::{EVMChainId, H160};
 use common::{AssetId32, AssetName, AssetSymbol, PredefinedAssetId};
 use std::str::FromStr;
-use substrate_gen::runtime;
 
 #[derive(Args, Debug)]
 pub(crate) struct Command {
@@ -85,7 +84,7 @@ impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_unsigned_ethereum().await?;
         let sub = self.sub.get_signed_substrate().await?;
-        let network_id = eth.get_chainid().await?;
+        let network_id = eth.chainid().await?;
         if self.check_if_registered(&sub, network_id).await? {
             return Ok(());
         }
@@ -94,7 +93,7 @@ impl Command {
                 asset_id,
                 address,
                 decimals,
-            } => runtime::runtime_types::erc20_app::pallet::Call::register_existing_erc20_asset {
+            } => runtime::runtime_types::evm_fungible_app::pallet::Call::register_existing_sidechain_asset {
                 network_id,
                 asset_id: asset_id.clone(),
                 address: *address,
@@ -105,7 +104,7 @@ impl Command {
                 name,
                 symbol,
                 decimals,
-            } => runtime::runtime_types::erc20_app::pallet::Call::register_erc20_asset {
+            } => runtime::runtime_types::evm_fungible_app::pallet::Call::register_sidechain_asset {
                 network_id,
                 address: address.clone(),
                 name: AssetName::from_str(name.as_str()).unwrap(),
@@ -113,13 +112,13 @@ impl Command {
                 decimals: *decimals,
             },
             AssetKind::Native { asset_id } => {
-                runtime::runtime_types::erc20_app::pallet::Call::register_native_asset {
+                runtime::runtime_types::evm_fungible_app::pallet::Call::register_thischain_asset {
                     network_id,
                     asset_id: asset_id.clone(),
                 }
             }
         };
-        let call = runtime::runtime_types::framenode_runtime::RuntimeCall::ERC20App(call);
+        let call = runtime::runtime_types::framenode_runtime::RuntimeCall::EVMFungibleApp(call);
         info!("Sudo call extrinsic: {:?}", call);
         sub.submit_extrinsic(&runtime::tx().sudo().sudo(call))
             .await?;
@@ -129,14 +128,14 @@ impl Command {
     pub async fn check_if_registered(
         &self,
         sub: &SubSignedClient<MainnetConfig>,
-        network_id: U256,
+        network_id: EVMChainId,
     ) -> AnyResult<bool> {
         let is_registered = match &self.asset_kind {
             AssetKind::ExistingERC20 { asset_id, .. } | AssetKind::Native { asset_id } => {
                 let is_registered = sub
                     .storage_fetch(
                         &mainnet_runtime::storage()
-                            .erc20_app()
+                            .evm_fungible_app()
                             .asset_kinds(&network_id, asset_id),
                         (),
                     )
@@ -148,7 +147,7 @@ impl Command {
                 let is_registered = sub
                     .storage_fetch(
                         &mainnet_runtime::storage()
-                            .erc20_app()
+                            .evm_fungible_app()
                             .assets_by_addresses(&network_id, address),
                         (),
                     )

@@ -30,6 +30,7 @@
 
 use crate::cli::prelude::*;
 use bridge_types::H160;
+use sp_core::crypto::Ss58Codec;
 
 #[derive(Args, Debug)]
 pub(crate) struct Command {
@@ -37,30 +38,36 @@ pub(crate) struct Command {
     eth: EthereumClient,
     /// EthApp contract address
     #[clap(long)]
-    eth_app: H160,
+    channel_address: H160,
+    #[clap(long)]
+    peers: Vec<String>,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
+        let peers = self
+            .peers
+            .iter()
+            .map(|peer| sp_core::ecdsa::Public::from_string(peer.as_str()))
+            .try_fold(vec![], |mut acc, peer| -> AnyResult<Vec<H160>> {
+                let pk = secp256k1::PublicKey::parse_compressed(&peer?.0)?;
+                let address = common::eth::public_key_to_eth_address(&pk);
+                acc.push(address);
+                Ok(acc)
+            })?;
+        info!("Peers: {:?}", peers);
         let eth = self.eth.get_signed_ethereum().await?;
-        let eth_app = ethereum_gen::ETHApp::new(self.eth_app.clone(), eth.inner());
-        let inbound_channel_address = eth_app.inbound().call().await?;
-        let outbound_channel_address = eth_app.outbound().call().await?;
-        let inbound_channel =
-            ethereum_gen::InboundChannel::new(inbound_channel_address, eth.inner());
-        let outbound_channel =
-            ethereum_gen::OutboundChannel::new(outbound_channel_address, eth.inner());
-        for call in [inbound_channel.reset(), outbound_channel.reset()] {
-            info!("Reset {:?}", call.tx.to());
-            let call = call.legacy().from(eth.address());
-            debug!("Static call: {:?}", call);
-            call.call().await?;
-            debug!("Send transaction");
-            let pending = call.send().await?;
-            debug!("Pending transaction: {:?}", pending);
-            let result = pending.await?;
-            debug!("Confirmed: {:?}", result);
-        }
+        let channel = ethereum_gen::ChannelHandler::new(self.channel_address, eth.inner());
+        let call = channel.initialize(peers);
+        info!("Initialize channel {:?}", call.tx.to());
+        let call = call.legacy().from(eth.address());
+        debug!("Static call: {:?}", call);
+        call.call().await?;
+        debug!("Send transaction");
+        let pending = call.send().await?;
+        debug!("Pending transaction: {:?}", pending);
+        let result = pending.confirmations(1).await?;
+        debug!("Confirmed: {:?}", result);
         Ok(())
     }
 }
