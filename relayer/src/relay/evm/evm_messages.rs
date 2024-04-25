@@ -45,7 +45,7 @@ use ethers::prelude::*;
 const BLOCKS_TO_INITIAL_SEARCH: u64 = 49000; // Ethereum light client keep 50000 blocks
 
 pub struct SubstrateMessagesRelay {
-    sub: SubSignedClient<MainnetConfig>,
+    sub: SubUnsignedClient<MainnetConfig>,
     eth: EthUnsignedClient,
     evm_network_id: GenericNetworkId,
     sub_network_id: GenericNetworkId,
@@ -56,7 +56,7 @@ pub struct SubstrateMessagesRelay {
 
 impl SubstrateMessagesRelay {
     pub async fn new(
-        sub: SubSignedClient<MainnetConfig>,
+        sub: SubUnsignedClient<MainnetConfig>,
         eth: EthUnsignedClient,
         signer: ecdsa::Pair,
     ) -> AnyResult<Self> {
@@ -127,6 +127,7 @@ impl SubstrateMessagesRelay {
                     new_base_fee: base_fee,
                 }),
             );
+            info!("Submitting base fee update: {}", base_fee);
             self.submit_commitment(commitment).await?;
         }
 
@@ -175,6 +176,7 @@ impl SubstrateMessagesRelay {
                             .map_err(|_| anyhow::anyhow!("Invalid payload"))?,
                     }),
                 );
+                info!("Submit commitment: {}", commitment.nonce());
                 self.submit_commitment(commitment).await?;
                 sub_nonce += 1;
             }
@@ -190,6 +192,7 @@ impl SubstrateMessagesRelay {
             commitment.hash(),
         ));
         if self.should_send_approval(message).await? {
+            info!("Sending approval");
             let signature = self.signer.sign_prehashed(&message.0);
             self.sub
                 .submit_unsigned_extrinsic(&runtime::tx().bridge_data_signer().approve(
@@ -200,19 +203,28 @@ impl SubstrateMessagesRelay {
                 .await?;
         }
         if self.should_send_commitment(message).await? {
+            info!("Sending commitment");
             let approvals = self.approvals(message).await?;
             let proof = VerifierMultiProof::EVMMultisig(
                 runtime::runtime_types::multisig_verifier::MultiEVMProof {
                     proof: approvals.try_into().unwrap(),
                 },
             );
-            self.sub
-                .submit_unsigned_extrinsic(&runtime::tx().bridge_inbound_channel().submit(
-                    self.evm_network_id,
-                    commitment,
-                    proof,
-                ))
+            let success = self
+                .sub
+                .submit_concurrent_unsigned_extrinsic(
+                    &runtime::tx().bridge_inbound_channel().submit(
+                        self.evm_network_id,
+                        commitment,
+                        proof,
+                    ),
+                )
                 .await?;
+            if success {
+                info!("Commitment submitted by this relayer");
+            } else {
+                info!("Commitment will be submitted by another relayer");
+            }
         }
         Ok(())
     }
@@ -327,6 +339,7 @@ impl SubstrateMessagesRelay {
                         block_number: meta.block_number.as_u64(),
                     }),
                 );
+                info!("Submitting status report: {:?}", commitment.nonce());
                 self.submit_commitment(commitment).await?;
                 sub_reported_nonce += 1;
             }

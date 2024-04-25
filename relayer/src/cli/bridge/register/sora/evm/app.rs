@@ -28,8 +28,8 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::cli::prelude::*;
-use bridge_types::{types::AssetKind, EVMChainId, H160};
+use crate::{cli::prelude::*, substrate::AssetId};
+use bridge_types::{EVMChainId, H160};
 use common::ETH;
 
 #[derive(Args, Debug)]
@@ -45,47 +45,35 @@ pub(crate) struct Command {
 #[derive(Subcommand, Debug)]
 pub(crate) enum Apps {
     /// Register ERC20App
-    FungibleApp {
+    FungibleNew {
         /// ERC20App contract address
+        #[clap(long)]
+        contract: H160,
+        #[clap(long)]
+        name: common::AssetName,
+        #[clap(long)]
+        symbol: common::AssetSymbol,
+        #[clap(long)]
+        precision: u8,
+    },
+    /// Register EthApp with predefined ETH asset id
+    FungiblePredefined {
+        /// EthApp contract address
         #[clap(long)]
         contract: H160,
     },
     /// Register EthApp with predefined ETH asset id
-    EthAppPredefined {
+    FungibleExisting {
         /// EthApp contract address
         #[clap(long)]
         contract: H160,
+        /// AssetId
+        #[clap(long)]
+        asset_id: AssetId,
         /// ETH precision
         #[clap(long)]
         precision: u8,
     },
-    // / Register EthApp with creating new ETH asset
-    // EthAppNew {
-    //     /// EthApp contract address
-    //     #[clap(long)]
-    //     contract: H160,
-    //     /// ETH asset name
-    //     #[clap(long)]
-    //     name: String,
-    //     /// ETH asset symbol
-    //     #[clap(long)]
-    //     symbol: String,
-    //     /// ETH precision
-    //     #[clap(long)]
-    //     precision: u8,
-    // },
-    // /// Register EthApp with existing ETH asset
-    // EthAppExisting {
-    //     /// EthApp contract address
-    //     #[clap(long)]
-    //     contract: H160,
-    //     /// ETH asset id
-    //     #[clap(long)]
-    //     asset_id: AssetId,
-    //     /// ETH precision
-    //     #[clap(long)]
-    //     precision: u8,
-    // },
 }
 
 impl Command {
@@ -97,22 +85,39 @@ impl Command {
             return Ok(());
         }
         let call = match &self.apps {
-            Apps::FungibleApp { contract } => {
-                runtime::runtime_types::framenode_runtime::RuntimeCall::EVMFungibleApp(
-                    runtime::runtime_types::evm_fungible_app::pallet::Call::register_fungible_app {
-                        network_id,
-                        contract: *contract,
-                    },
-                )
-            }
-            Apps::EthAppPredefined {
+            Apps::FungibleNew {
                 contract,
+                name,
+                symbol,
                 precision,
             } => runtime::runtime_types::framenode_runtime::RuntimeCall::EVMFungibleApp(
-                runtime::runtime_types::evm_fungible_app::pallet::Call::register_native_app {
+                runtime::runtime_types::evm_fungible_app::pallet::Call::register_network {
+                    network_id,
+                    contract: *contract,
+                    name: name.clone(),
+                    symbol: symbol.clone(),
+                    sidechain_precision: *precision,
+                },
+            ),
+            Apps::FungiblePredefined {
+                contract,
+            } => runtime::runtime_types::framenode_runtime::RuntimeCall::EVMFungibleApp(
+                runtime::runtime_types::evm_fungible_app::pallet::Call::register_network_with_existing_asset {
                     network_id,
                     contract: *contract,
                     asset_id: ETH.into(),
+                    sidechain_precision: 18,
+                },
+            ),
+            Apps::FungibleExisting {
+                contract,
+                asset_id,
+                precision
+            } => runtime::runtime_types::framenode_runtime::RuntimeCall::EVMFungibleApp(
+                runtime::runtime_types::evm_fungible_app::pallet::Call::register_network_with_existing_asset {
+                    network_id,
+                    contract: *contract,
+                    asset_id: *asset_id,
                     sidechain_precision: *precision,
                 },
             ),
@@ -129,23 +134,14 @@ impl Command {
         network_id: EVMChainId,
     ) -> AnyResult<bool> {
         let (contract, registered) = match self.apps {
-            Apps::FungibleApp { contract } => {
+            Apps::FungibleNew { contract, .. }
+            | Apps::FungibleExisting { contract, .. }
+            | Apps::FungiblePredefined { contract, .. } => {
                 let registered = sub
                     .storage_fetch(
                         &mainnet_runtime::storage()
                             .evm_fungible_app()
-                            .app_addresses(&network_id, &AssetKind::Sidechain),
-                        (),
-                    )
-                    .await?;
-                (contract, registered)
-            }
-            Apps::EthAppPredefined { contract, .. } => {
-                let registered = sub
-                    .storage_fetch(
-                        &mainnet_runtime::storage()
-                            .evm_fungible_app()
-                            .app_addresses(&network_id, &AssetKind::Native),
+                            .app_addresses(&network_id),
                         (),
                     )
                     .await?;

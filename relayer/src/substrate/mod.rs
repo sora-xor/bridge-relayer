@@ -448,6 +448,23 @@ impl<T: ConfigExt> UnsignedClient<T> {
         SignedClient::<T>::new(self, signer).await
     }
 
+    pub fn is_transaction_imported_or_banned(error: &subxt::Error) -> bool {
+        match error {
+            subxt::Error::Rpc(subxt::error::RpcError::ClientError(error)) => {
+                let Some(error) = error.downcast_ref::<jsonrpsee::core::Error>() else {
+                    return false;
+                };
+                match error {
+                    jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+                        error,
+                    )) => error.code() == 1013 || error.code() == 1014,
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+
     pub async fn submit_unsigned_extrinsic<P: subxt::tx::TxPayload>(
         &self,
         xt: &P,
@@ -468,26 +485,47 @@ impl<T: ConfigExt> UnsignedClient<T> {
             .submit_and_watch()
             .await
             .map_err(|e| {
-                error!("submit then watch error: {:?}", e);
+                debug!("submit then watch error: {:?}", e);
                 e
             })
             .context("sign and submit then watch")?
             .wait_for_in_block()
             .await
             .map_err(|e| {
-                error!("wait for in block error: {:?}", e);
+                debug!("wait for in block error: {:?}", e);
                 e
             })
             .context("wait for in block")?
             .wait_for_success()
             .await
             .map_err(|e| {
-                error!("wait for success error: {:?}", e);
+                debug!("wait for success error: {:?}", e);
                 e
             })
             .context("wait for success")?;
         log_extrinsic_events::<T>(res);
         Ok(())
+    }
+
+    pub async fn submit_concurrent_unsigned_extrinsic<P: subxt::tx::TxPayload>(
+        &self,
+        xt: &P,
+    ) -> AnyResult<bool> {
+        let result = self.submit_unsigned_extrinsic(xt).await;
+        match result {
+            Err(e) => {
+                let Some(subxt_error) = e.downcast_ref::<subxt::Error>() else {
+                    error!("unexpected error: {:?}", e);
+                    return Err(e);
+                };
+                if Self::is_transaction_imported_or_banned(subxt_error) {
+                    Ok(false)
+                } else {
+                    Err(e)
+                }
+            }
+            Ok(()) => Ok(true),
+        }
     }
 }
 
