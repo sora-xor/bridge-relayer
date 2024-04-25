@@ -104,30 +104,30 @@ beefy-gadget = { git = "https://github.com/sora-xor/substrate.git", branch = "po
 beefy-gadget-rpc = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 beefy-merkle-tree = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 
-# [patch."https://github.com/sora-xor/sora2-common.git"]
-# beefy-light-client = { git = "https://github.com/sora-xor//sora2-common.git", tag = "1.0.23" }
-# leaf-provider-rpc = { git = "https://github.com/sora-xor//sora2-common.git", tag = "1.0.23" }
-# leaf-provider-runtime-api = { git = "https://github.com/sora-xor//sora2-common.git", tag = "1.0.23" }
-# bridge-common = { git = "https://github.com/sora-xor//sora2-common.git", tag = "1.0.23" }
-# bridge-types = { git = "https://github.com/sora-xor//sora2-common.git", tag = "1.0.23" }
-
 [patch."https://github.com/sora-xor/sora2-common.git"]
-beefy-light-client = { path = "../sora2-common/pallets/beefy-light-client" }
-leaf-provider-rpc = { path = "../sora2-common/pallets/leaf-provider/rpc" }
-leaf-provider-runtime-api = { path = "../sora2-common/pallets/leaf-provider/runtime-api" }
-bridge-common = { path = "../sora2-common/pallets/bridge-common" }
-bridge-types = { path = "../sora2-common/pallets/types" }
+beefy-light-client = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
+leaf-provider-rpc = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
+leaf-provider-runtime-api = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
+bridge-common = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
+bridge-types = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
 
+# [patch."https://github.com/sora-xor/sora2-common.git"]
+# beefy-light-client = { path = "../sora2-common/pallets/beefy-light-client" }
+# leaf-provider-rpc = { path = "../sora2-common/pallets/leaf-provider/rpc" }
+# leaf-provider-runtime-api = { path = "../sora2-common/pallets/leaf-provider/runtime-api" }
+# bridge-common = { path = "../sora2-common/pallets/bridge-common" }
+# bridge-types = { path = "../sora2-common/pallets/types" }
 
-# [patch."https://github.com/sora-xor/sora2-network.git"]
-# assets-rpc = { git = "https://github.com/sora-xor//sora2-network.git" }
-# assets-runtime-api = { git = "https://github.com/sora-xor//sora2-network.git" }
-# common = { git = "https://github.com/sora-xor//sora2-network.git" }
 
 [patch."https://github.com/sora-xor/sora2-network.git"]
-assets-rpc = { path = "../sora2-network/pallets/assets/rpc" }
-assets-runtime-api = { path = "../sora2-network/pallets/assets/runtime-api" }
-common = { path = "../sora2-network/common" }
+assets-rpc = { git = "https://github.com/sora-xor//sora2-network.git", branch = "evm-bridge" }
+assets-runtime-api = { git = "https://github.com/sora-xor//sora2-network.git", branch = "evm-bridge" }
+common = { git = "https://github.com/sora-xor//sora2-network.git", branch = "evm-bridge" }
+
+# [patch."https://github.com/sora-xor/sora2-network.git"]
+# assets-rpc = { path = "../sora2-network/pallets/assets/rpc" }
+# assets-runtime-api = { path = "../sora2-network/pallets/assets/runtime-api" }
+# common = { path = "../sora2-network/common" }
 
 [workspace]
 members = ["substrate-gen", "ethereum-gen", "parachain-gen", "liberland-gen", "relayer"]
