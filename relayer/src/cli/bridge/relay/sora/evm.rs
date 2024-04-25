@@ -29,8 +29,6 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::cli::prelude::*;
-use crate::relay::evm::evm_messages::SubstrateMessagesRelay;
-use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Args, Clone, Debug)]
@@ -39,44 +37,43 @@ pub(crate) struct Command {
     sub: SubstrateClient,
     #[clap(flatten)]
     eth: EthereumClient,
-    /// Ethereum DAG cache dir
-    #[clap(long)]
-    base_path: PathBuf,
-    /// Not send messages from Ethereum to Substrate
-    #[clap(long)]
-    disable_message_relay: bool,
     /// Signer for bridge messages
     #[clap(long)]
-    signer: String,
+    signer: Option<String>,
 }
 
 impl Command {
     pub async fn run(&self) -> AnyResult<()> {
-        let eth = self.eth.get_unsigned_ethereum().await?;
-        let sub = self.sub.get_signed_substrate().await?;
-        let signer = sp_core::ecdsa::Pair::from_string(&self.signer, None)?;
-        let chain_id = eth.chainid().await?;
-        debug!("Eth chain id = {}", chain_id);
-        loop {
-            let has_channel = sub
+        let eth = self.eth.get_ethereum().await?;
+        let sub = self.sub.get_unsigned_substrate().await?;
+        let signer = if let Some(signer) = &self.signer {
+            Some(sp_core::ecdsa::Pair::from_string(signer, None)?)
+        } else {
+            None
+        };
+        let network_id = either::for_both!(&eth, e => e.chainid().await.context("fetch chain id")?);
+        let channel_address = loop {
+            let channel_address = sub
                 .storage_fetch(
                     &runtime::storage()
                         .bridge_inbound_channel()
-                        .evm_channel_addresses(&chain_id),
+                        .evm_channel_addresses(&network_id),
                     (),
                 )
-                .await?
-                .is_some();
-            if has_channel {
-                break;
+                .await?;
+            if let Some(channel_address) = channel_address {
+                break channel_address;
             }
-            debug!(
-                "Waiting for bridge to be available. Channel status = {}",
-                has_channel
-            );
+            debug!("Waiting for bridge to be available");
             tokio::time::sleep(Duration::from_secs(10)).await;
-        }
-        let messages_relay = SubstrateMessagesRelay::new(sub, eth, signer).await?;
+        };
+        let messages_relay = crate::relay::evm::sub_messages::RelayBuilder::new()
+            .with_channel_contract(channel_address)
+            .with_receiver_client(eth)
+            .with_sender_client(sub)
+            .with_signer(signer)
+            .build()
+            .await?;
         messages_relay.run().await?;
         Ok(())
     }

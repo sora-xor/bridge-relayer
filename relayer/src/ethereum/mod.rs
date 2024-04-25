@@ -48,6 +48,8 @@ pub type SignedClientInner = SignerMiddleware<UnsignedClientInner, EthWallet>;
 
 pub type UnsignedClientInner = Provider<UniversalClient>;
 
+pub type UnsignedOrSignedClient = Either<UnsignedClient, SignedClient>;
+
 #[derive(Clone, Debug)]
 pub struct UnsignedClient(Arc<UnsignedClientInner>);
 

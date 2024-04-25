@@ -169,6 +169,16 @@ impl EthereumClient {
             .await?;
         Ok(eth)
     }
+
+    pub async fn get_ethereum(
+        &self,
+    ) -> AnyResult<either::Either<EthUnsignedClient, EthSignedClient>> {
+        if self.ethereum_key.is_none() && self.ethereum_key_file.is_none() {
+            Ok(Either::Left(self.get_unsigned_ethereum().await?))
+        } else {
+            Ok(Either::Right(self.get_signed_ethereum().await?))
+        }
+    }
 }
 
 #[derive(Args, Debug, Clone)]

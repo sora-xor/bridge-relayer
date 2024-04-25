@@ -31,6 +31,7 @@
 use std::time::Duration;
 
 use crate::cli::prelude::*;
+use crate::relay::evm::evm_messages::SubstrateMessagesRelay;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
@@ -45,32 +46,31 @@ pub(crate) struct Command {
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
-        let eth = self.eth.get_signed_ethereum().await?;
+        let eth = self.eth.get_unsigned_ethereum().await?;
         let sub = self.sub.get_unsigned_substrate().await?;
         let signer = sp_core::ecdsa::Pair::from_string(&self.signer, None)?;
-        let network_id = eth.chainid().await.context("fetch chain id")?;
-        let channel_address = loop {
-            let channel_address = sub
+        let chain_id = eth.chainid().await?;
+        debug!("Eth chain id = {}", chain_id);
+        loop {
+            let has_channel = sub
                 .storage_fetch(
                     &runtime::storage()
                         .bridge_inbound_channel()
-                        .evm_channel_addresses(&network_id),
+                        .evm_channel_addresses(&chain_id),
                     (),
                 )
-                .await?;
-            if let Some(channel_address) = channel_address {
-                break channel_address;
+                .await?
+                .is_some();
+            if has_channel {
+                break;
             }
-            debug!("Waiting for bridge to be available");
+            debug!(
+                "Waiting for bridge to be available. Channel status = {}",
+                has_channel
+            );
             tokio::time::sleep(Duration::from_secs(10)).await;
-        };
-        let messages_relay = crate::relay::evm::sub_messages::RelayBuilder::new()
-            .with_channel_contract(channel_address)
-            .with_receiver_client(eth)
-            .with_sender_client(sub)
-            .with_signer(signer)
-            .build()
-            .await?;
+        }
+        let messages_relay = SubstrateMessagesRelay::new(sub, eth, signer).await?;
         messages_relay.run().await?;
         Ok(())
     }

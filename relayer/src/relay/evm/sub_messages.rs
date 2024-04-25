@@ -36,8 +36,11 @@ use std::time::Duration;
 
 use crate::ethereum::EthLogDecode;
 use crate::ethereum::SignedClientInner;
+use crate::ethereum::UnsignedClientInner;
 use crate::prelude::*;
+use crate::substrate::MaxU32;
 use crate::substrate::{BlockNumberOrHash, UnboundedGenericCommitment};
+use bridge_types::evm::OutboundCommitment;
 use bridge_types::GenericNetworkId;
 use bridge_types::{Address, U256};
 use ethereum_gen::ChannelHandler;
@@ -48,7 +51,7 @@ use sp_core::{ecdsa, H256};
 
 pub struct RelayBuilder {
     sender: Option<SubUnsignedClient<MainnetConfig>>,
-    receiver: Option<EthSignedClient>,
+    receiver: Option<EthUnsignedOrSignedClient>,
     channel: Option<Address>,
     signer: Option<ecdsa::Pair>,
 }
@@ -74,13 +77,13 @@ impl RelayBuilder {
         self
     }
 
-    pub fn with_receiver_client(mut self, receiver: EthSignedClient) -> Self {
+    pub fn with_receiver_client(mut self, receiver: EthUnsignedOrSignedClient) -> Self {
         self.receiver = Some(receiver);
         self
     }
 
-    pub fn with_signer(mut self, signer: ecdsa::Pair) -> Self {
-        self.signer = Some(signer);
+    pub fn with_signer(mut self, signer: Option<ecdsa::Pair>) -> Self {
+        self.signer = signer;
         self
     }
 
@@ -91,11 +94,11 @@ impl RelayBuilder {
 
     pub async fn build(self) -> AnyResult<Relay> {
         let sender = self.sender.expect("sender client is needed");
-        let signer = self.signer.expect("signer is needed");
         let receiver = self.receiver.expect("receiver client is needed");
-        let inbound_channel = ChannelHandler::new(
-            self.channel.expect("inbound channel address is needed"),
-            receiver.inner(),
+        let channel_address = self.channel.expect("inbound channel address is needed");
+        let inbound_channel = receiver.as_ref().map_either(
+            |l| ChannelHandler::new(channel_address, l.inner()),
+            |r| ChannelHandler::new(channel_address, r.inner()),
         );
         let sub_network_id = sender.constant_fetch_or_default(
             &runtime::constants()
@@ -103,12 +106,12 @@ impl RelayBuilder {
                 .this_network_id(),
         )?;
         Ok(Relay {
-            evm_network_id: receiver.chainid().await?.into(),
+            evm_network_id: either::for_both!(&receiver, r => r.chainid().await?.into()),
             sub_network_id,
             sub: sender,
             evm: receiver,
             inbound_channel,
-            signer,
+            signer: self.signer,
         })
     }
 }
@@ -116,11 +119,11 @@ impl RelayBuilder {
 #[derive(Clone)]
 pub struct Relay {
     sub: SubUnsignedClient<MainnetConfig>,
-    evm: EthSignedClient,
-    inbound_channel: ChannelHandler<SignedClientInner>,
+    evm: EthUnsignedOrSignedClient,
+    inbound_channel: Either<ChannelHandler<UnsignedClientInner>, ChannelHandler<SignedClientInner>>,
     evm_network_id: GenericNetworkId,
     sub_network_id: GenericNetworkId,
-    signer: ecdsa::Pair,
+    signer: Option<ecdsa::Pair>,
 }
 
 // Relays batches of messages from Substrate to Ethereum.
@@ -130,7 +133,7 @@ impl Relay {
     }
 
     async fn inbound_channel_nonce(&self) -> AnyResult<u64> {
-        let nonce = self.inbound_channel.batch_nonce().call().await?;
+        let nonce = either::for_both!(&self.inbound_channel, c => c.batch_nonce().call().await?);
         Ok(nonce as u64)
     }
 
@@ -147,34 +150,93 @@ impl Relay {
         Ok(nonce)
     }
 
-    pub fn prepare_message(msg: H256) -> H256 {
+    pub fn prepare_evm_signed_message(msg: H256) -> H256 {
         let mut prefix = b"\x19Ethereum Signed Message:\n32".to_vec();
         prefix.extend(msg.as_bytes());
         sp_core::keccak_256(&prefix).into()
     }
 
-    async fn submit_commitment(&self, commitment: UnboundedGenericCommitment) -> AnyResult<()> {
-        let UnboundedGenericCommitment::EVM(bridge_types::evm::Commitment::Outbound(commitment)) =
-            commitment
-        else {
-            return Err(anyhow::anyhow!(
-                "Invalid commitment. EVM outbound commitment is expected"
-            ));
+    async fn send_commitment(
+        &self,
+        commitment: OutboundCommitment<MaxU32, MaxU32>,
+        signed_message: H256,
+    ) -> AnyResult<()> {
+        let (Some(evm), Some(channel)) = (
+            self.evm.as_ref().right(),
+            self.inbound_channel.as_ref().right(),
+        ) else {
+            log::debug!("Don't have a relayer account private key, skipping commitment send");
+            return Ok(());
         };
+        let batch = Self::prepare_batch(&commitment);
         let messages_total_gas = commitment.total_max_gas;
-        let batch = ethereum_gen::channel_handler::Batch {
+        let approvals = self.approvals(signed_message).await?;
+        let (v, r, s) = approvals
+            .into_iter()
+            .map(|approval| {
+                (
+                    approval.0[64],
+                    approval.0[..32].try_into().unwrap(),
+                    approval.0[32..64].try_into().unwrap(),
+                )
+            })
+            .fold((vec![], vec![], vec![]), |mut vrs, (v, r, s)| {
+                vrs.0.push(v + 27);
+                vrs.1.push(r);
+                vrs.2.push(s);
+                vrs
+            });
+        let mut call: ethers::contract::ContractCall<_, ()> =
+            channel.submit(batch, v, r, s).legacy();
+
+        debug!("Fill submit messages");
+        evm.fill_transaction(&mut call.tx, call.block).await?;
+        debug!("Messages total gas: {}", messages_total_gas);
+        call.tx.set_gas(self.submit_message_gas(messages_total_gas));
+        debug!("Check submit messages");
+        call.call().await?;
+        evm.save_gas_price(&call, "submit-messages").await?;
+        debug!("Send submit messages");
+        let tx = call.send().await?;
+        debug!("Wait for confirmations submit messages: {:?}", tx);
+        let tx = tx.confirmations(1).await?;
+        debug!("Submit messages: {:?}", tx);
+        if let Some(tx) = tx {
+            for log in tx.logs {
+                let raw_log = RawLog {
+                    topics: log.topics.clone(),
+                    data: log.data.to_vec(),
+                };
+                if let Ok(log) =
+                    <ethereum_gen::channel_handler::BatchDispatchedFilter as EthLogDecode>::decode_log(&raw_log)
+                {
+                    info!("Batch dispatched: {:?}", log);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn prepare_batch(
+        commitment: &OutboundCommitment<MaxU32, MaxU32>,
+    ) -> ethereum_gen::channel_handler::Batch {
+        ethereum_gen::channel_handler::Batch {
             nonce: commitment.nonce.into(),
             total_max_gas: commitment.total_max_gas.into(),
             messages: commitment
                 .messages
-                .into_iter()
+                .iter()
                 .map(|message| ethereum_gen::channel_handler::Message {
                     max_gas: message.max_gas.into(),
                     target: message.target.into(),
                     payload: message.payload.to_vec().into(),
                 })
                 .collect(),
-        };
+        }
+    }
+
+    fn prepare_message_to_sign(&self, commitment: &OutboundCommitment<MaxU32, MaxU32>) -> H256 {
+        let batch = Self::prepare_batch(&commitment);
 
         let tokens = batch.clone().into_tokens();
         let tokens = ethers::abi::Token::Tuple(tokens);
@@ -185,77 +247,67 @@ impl Relay {
             self.evm_network_id,
             batch_hash,
         ));
-        let message = Self::prepare_message(message);
-        if self.should_send_approval(message).await? {
-            let signature = self.signer.sign_prehashed(&message.0);
-            self.sub
-                .submit_unsigned_extrinsic(&runtime::tx().bridge_data_signer().approve(
-                    self.evm_network_id,
-                    message,
-                    signature,
-                ))
-                .await?;
+        let message = Self::prepare_evm_signed_message(message);
+        message
+    }
+
+    async fn approve_and_send_commitment(
+        &self,
+        commitment: UnboundedGenericCommitment,
+    ) -> AnyResult<()> {
+        let UnboundedGenericCommitment::EVM(bridge_types::evm::Commitment::Outbound(commitment)) =
+            commitment
+        else {
+            return Err(anyhow::anyhow!(
+                "Invalid commitment. EVM outbound commitment is expected"
+            ));
+        };
+        let message = self.prepare_message_to_sign(&commitment);
+        if let Some(signer) = &self.signer {
+            if self.should_send_approval(message).await? {
+                let signature = signer.sign_prehashed(&message.0);
+                self.sub
+                    .submit_unsigned_extrinsic(&runtime::tx().bridge_data_signer().approve(
+                        self.evm_network_id,
+                        message,
+                        signature,
+                    ))
+                    .await?;
+            }
         }
         if self.should_send_commitment(message).await? {
-            let approvals = self.approvals(message).await?;
-            let (v, r, s) = approvals
-                .into_iter()
-                .map(|approval| {
-                    (
-                        approval.0[64],
-                        approval.0[..32].try_into().unwrap(),
-                        approval.0[32..64].try_into().unwrap(),
-                    )
-                })
-                .fold((vec![], vec![], vec![]), |mut vrs, (v, r, s)| {
-                    vrs.0.push(v + 27);
-                    vrs.1.push(r);
-                    vrs.2.push(s);
-                    vrs
-                });
-            let mut call: ethers::contract::ContractCall<_, ()> =
-                self.inbound_channel.submit(batch, v, r, s).legacy();
-
-            debug!("Fill submit messages");
-            self.evm.fill_transaction(&mut call.tx, call.block).await?;
-            debug!("Messages total gas: {}", messages_total_gas);
-            call.tx.set_gas(self.submit_message_gas(messages_total_gas));
-            debug!("Check submit messages");
-            call.call().await?;
-            self.evm.save_gas_price(&call, "submit-messages").await?;
-            debug!("Send submit messages");
-            let tx = call.send().await?;
-            debug!("Wait for confirmations submit messages: {:?}", tx);
-            let tx = tx.confirmations(1).await?;
-            debug!("Submit messages: {:?}", tx);
-            if let Some(tx) = tx {
-                for log in tx.logs {
-                    let raw_log = RawLog {
-                        topics: log.topics.clone(),
-                        data: log.data.to_vec(),
-                    };
-                    if let Ok(log) =
-                    <ethereum_gen::channel_handler::BatchDispatchedFilter as EthLogDecode>::decode_log(&raw_log)
-                {
-                    info!("Batch dispatched: {:?}", log);
-                }
-                }
-            }
+            self.send_commitment(commitment, message).await?;
         }
         Ok(())
     }
 
     async fn should_send_approval(&self, message: H256) -> AnyResult<bool> {
+        let signer_public = self.signer_public()?;
         let peers = self.receiver_peers().await?;
         let approvals = self.approvals(message).await?;
         let is_already_approved = approvals
             .iter()
             .filter_map(|approval| approval.recover_prehashed(&message.0))
-            .any(|public| self.signer.public() == public);
+            .any(|public| signer_public == public);
         Ok(
             (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32)
                 && !is_already_approved,
         )
+    }
+
+    fn signer_public(&self) -> AnyResult<ecdsa::Public> {
+        let signer_public = self
+            .signer
+            .as_ref()
+            .map(|x| x.public())
+            .ok_or(anyhow::anyhow!("No signer"))?;
+        Ok(signer_public)
+    }
+
+    async fn is_peer(&self) -> AnyResult<bool> {
+        let signer_public = self.signer_public()?;
+        let peers = self.receiver_peers().await?;
+        Ok(peers.iter().any(|public| signer_public == *public))
     }
 
     async fn should_send_commitment(&self, message: H256) -> AnyResult<bool> {
@@ -305,6 +357,9 @@ impl Relay {
     }
 
     pub async fn run(self) -> AnyResult<()> {
+        if self.signer.is_some() && !self.is_peer().await? {
+            return Err(anyhow::anyhow!("Provided signer key is not a peer"));
+        }
         let mut interval = tokio::time::interval(Duration::from_secs(6));
         loop {
             interval.tick().await;
@@ -332,7 +387,8 @@ impl Relay {
                         BlockNumberOrHash::Finalized,
                     )
                     .await?;
-                self.submit_commitment(offchain_data.commitment).await?;
+                self.approve_and_send_commitment(offchain_data.commitment)
+                    .await?;
             }
         }
     }
