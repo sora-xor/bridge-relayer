@@ -30,21 +30,9 @@
 
 ethers::contract::abigen!(
     ChannelHandler,
-    "sora2-federated-bridge-evm-contracts/abi/TestChannelHandler.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    ETHApp,
-    "sora2-federated-bridge-evm-contracts/abi/ETHApp.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    FAApp,
-    "sora2-federated-bridge-evm-contracts/abi/FAApp.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    IERC20Metadata,
-    "sora2-federated-bridge-evm-contracts/abi/IERC20Metadata.json",
+    "abi/TestChannelHandler.json",
     event_derives (serde::Deserialize, serde::Serialize);
     TestToken,
-    "sora2-federated-bridge-evm-contracts/abi/TestToken.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    MigrationApp,
-    "sora2-federated-bridge-evm-contracts/abi/MigrationApp.json",
+    "abi/TestToken.json",
     event_derives (serde::Deserialize, serde::Serialize);
 );
