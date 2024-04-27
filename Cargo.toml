@@ -105,11 +105,11 @@ beefy-gadget-rpc = { git = "https://github.com/sora-xor/substrate.git", branch =
 beefy-merkle-tree = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 
 [patch."https://github.com/sora-xor/sora2-common.git"]
-beefy-light-client = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
-leaf-provider-rpc = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
-leaf-provider-runtime-api = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
-bridge-common = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
-bridge-types = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-bridge-pallets" }
+beefy-light-client = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-fungible-app" }
+leaf-provider-rpc = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-fungible-app" }
+leaf-provider-runtime-api = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-fungible-app" }
+bridge-common = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-fungible-app" }
+bridge-types = { git = "https://github.com/sora-xor//sora2-common.git", branch = "evm-fungible-app" }
 
 # [patch."https://github.com/sora-xor/sora2-common.git"]
 # beefy-light-client = { path = "../sora2-common/pallets/beefy-light-client" }

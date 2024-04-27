@@ -28,9 +28,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// TODO #167: fix clippy warnings
-#![allow(clippy::all)]
-
 use std::collections::BTreeSet;
 use std::time::Duration;
 
@@ -105,32 +102,36 @@ impl SubstrateMessagesRelay {
         let GenericNetworkId::EVM(chain_id) = self.evm_network_id else {
             unreachable!()
         };
-        let old_base_fee = self
+        let eth_block = current_eth_block - current_eth_block % 10;
+
+        let last_update = self
             .sub
             .storage_fetch(
                 &runtime::storage().evm_fungible_app().base_fees(chain_id),
                 (),
             )
             .await?
-            .map(|x| x.base_fee)
+            .map(|x| x.evm_block_number)
             .unwrap_or(Default::default());
-        let eth_block = current_eth_block - current_eth_block % 10;
+        if eth_block <= last_update {
+            info!("Skip base fee update, too early");
+            return Ok(());
+        }
+
         let block = self
             .eth
             .get_block(eth_block)
             .await?
             .ok_or(anyhow::anyhow!("Block {} not found", eth_block))?;
         let base_fee = block.base_fee_per_gas.unwrap_or_default();
-        if base_fee != old_base_fee {
-            let commitment = UnboundedGenericCommitment::EVM(
-                bridge_types::evm::Commitment::BaseFeeUpdate(BaseFeeUpdate {
-                    new_base_fee: base_fee,
-                }),
-            );
-            info!("Submitting base fee update: {}", base_fee);
-            self.submit_commitment(commitment).await?;
-        }
-
+        let commitment = UnboundedGenericCommitment::EVM(
+            bridge_types::evm::Commitment::BaseFeeUpdate(BaseFeeUpdate {
+                new_base_fee: base_fee,
+                evm_block_number: eth_block,
+            }),
+        );
+        info!("Submitting base fee update: {}", base_fee);
+        self.submit_commitment(commitment).await?;
         Ok(())
     }
 
@@ -166,7 +167,8 @@ impl SubstrateMessagesRelay {
             if event.nonce.as_u64() == sub_nonce + 1 && meta.address == self.channel {
                 let commitment = UnboundedGenericCommitment::EVM(
                     bridge_types::evm::Commitment::Inbound(InboundCommitment {
-                        source: meta.address,
+                        channel: meta.address,
+                        source: event.source,
                         block_number: meta.block_number.as_u64(),
                         nonce: event.nonce.as_u64(),
                         payload: event
@@ -335,7 +337,7 @@ impl SubstrateMessagesRelay {
                         gas_spent: event.gas_spent,
                         relayer: event.relayer,
                         results: results.try_into().unwrap(),
-                        source: meta.address,
+                        channel: meta.address,
                         block_number: meta.block_number.as_u64(),
                     }),
                 );
