@@ -28,14 +28,21 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-ethers::contract::abigen!(
-    ChannelHandler,
-    "abi/TestChannelHandler.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    TestToken,
-    "abi/TestToken.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-    FAApp,
-    "abi/FAApp.json",
-    event_derives (serde::Deserialize, serde::Serialize);
-);
+mod sora;
+
+use crate::cli::prelude::*;
+use clap::*;
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum Commands {
+    /// EVM to SORA relay
+    Sora(sora::Command),
+}
+
+impl Commands {
+    pub async fn run(&self) -> AnyResult<()> {
+        match self {
+            Commands::Sora(cmd) => cmd.run().await,
+        }
+    }
+}
