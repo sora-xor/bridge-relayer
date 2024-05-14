@@ -28,11 +28,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// TODO #167: fix clippy warnings
-#![allow(clippy::all)]
-mod evm;
 mod liberland;
-mod parachain;
 mod sora;
 
 use crate::cli::prelude::*;
@@ -40,16 +36,10 @@ use clap::*;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
-    /// Relay commands from EVM to another networks
-    #[clap(subcommand)]
-    EVM(evm::Commands),
-    /// Relay commands from SORA to another networks
+    /// Liberland to SORA relay commands
     #[clap(subcommand)]
     Sora(sora::Commands),
-    /// Relay commands from parachain to another networks
-    #[clap(subcommand)]
-    Parachain(parachain::Commands),
-    /// Relay commands from liberland to another networks
+    /// SORA to Liberland relay commands
     #[clap(subcommand)]
     Liberland(liberland::Commands),
 }
@@ -57,9 +47,7 @@ pub(crate) enum Commands {
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
-            Commands::EVM(cmd) => cmd.run().await,
             Commands::Sora(cmd) => cmd.run().await,
-            Commands::Parachain(cmd) => cmd.run().await,
             Commands::Liberland(cmd) => cmd.run().await,
         }
     }

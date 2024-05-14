@@ -7,6 +7,7 @@ edition = "2021"
 ethereum-gen = { path = "../ethereum-gen" }
 substrate-gen = { path = "../substrate-gen" }
 parachain-gen = { path = "../parachain-gen" }
+liberland-gen = { path = "../liberland-gen" }
 beefy-light-client = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18", default-features = false }
 bridge-common = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18", default-features = false }
 bridge-types = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }

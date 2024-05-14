@@ -696,7 +696,7 @@ dependencies = [
 [[package]]
 name = "beefy-light-client"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.19#2afec11292bc2d6bb172daa918f3f957e36a2d06"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "beefy-merkle-tree",
  "bridge-common",
@@ -861,7 +861,7 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 [[package]]
 name = "bridge-common"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.19#2afec11292bc2d6bb172daa918f3f957e36a2d06"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "bitvec 1.0.1",
  "bridge-types",
@@ -908,6 +908,7 @@ dependencies = [
  "k256 0.13.1",
  "keccak-hasher",
  "leaf-provider-rpc",
+ "liberland-gen",
  "log",
  "lru 0.12.1",
  "mmr-rpc",
@@ -937,7 +938,7 @@ dependencies = [
 [[package]]
 name = "bridge-types"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.19#2afec11292bc2d6bb172daa918f3f957e36a2d06"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "derivative",
  "ethabi 17.2.0",
@@ -4046,7 +4047,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 [[package]]
 name = "leaf-provider-rpc"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.19#2afec11292bc2d6bb172daa918f3f957e36a2d06"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "jsonrpsee",
  "leaf-provider-runtime-api",
@@ -4063,7 +4064,7 @@ dependencies = [
 [[package]]
 name = "leaf-provider-runtime-api"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.19#2afec11292bc2d6bb172daa918f3f957e36a2d06"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.23#37a579c7a334d99c7693597b19ffd331308f9001"
 dependencies = [
  "bridge-types",
  "parity-scale-codec",
@@ -4079,6 +4080,23 @@ name = "libc"
 version = "0.2.149"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a08173bc88b7955d1b3145aa561539096c421ac8debde8cbc3612ec635fee29b"
+
+[[package]]
+name = "liberland-gen"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bridge-common",
+ "bridge-types",
+ "common",
+ "jsonrpsee",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-runtime",
+ "subxt",
+]
 
 [[package]]
 name = "libm"
