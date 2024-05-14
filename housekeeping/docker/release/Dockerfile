@@ -1,4 +1,6 @@
-FROM debian:bullseye-20240211-slim
+FROM debian:bullseye-20240513-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies
 RUN apt-get update && \
