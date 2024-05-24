@@ -397,7 +397,7 @@ checksum = "155a5a185e42c6b77ac7b88a15143d930a9e9727a5b7b77eed417404ab15c247"
 [[package]]
 name = "assets-rpc"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-network.git?branch=evm-bridge#f5b0145ca75b23e010a70fb708f56e773928c3cb"
+source = "git+https://github.com/sora-xor//sora2-network.git?tag=3.4.0#47a7f6d7dbe663d31d686d961786cfc9d239bf85"
 dependencies = [
  "assets-runtime-api",
  "common",
@@ -415,7 +415,7 @@ dependencies = [
 [[package]]
 name = "assets-runtime-api"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-network.git?branch=evm-bridge#f5b0145ca75b23e010a70fb708f56e773928c3cb"
+source = "git+https://github.com/sora-xor//sora2-network.git?tag=3.4.0#47a7f6d7dbe663d31d686d961786cfc9d239bf85"
 dependencies = [
  "common",
  "parity-scale-codec",
@@ -684,7 +684,7 @@ dependencies = [
 [[package]]
 name = "beefy-light-client"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=evm-fungible-app#5dc15b832c12c7640877e7e5ee37356ae6dfd916"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.24#cfedc198af9f89463f91c55d9fdd174082391dc0"
 dependencies = [
  "beefy-merkle-tree",
  "bridge-common",
@@ -850,7 +850,7 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 [[package]]
 name = "bridge-common"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=evm-fungible-app#5dc15b832c12c7640877e7e5ee37356ae6dfd916"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.24#cfedc198af9f89463f91c55d9fdd174082391dc0"
 dependencies = [
  "bitvec 1.0.1",
  "bridge-types",
@@ -929,7 +929,7 @@ dependencies = [
 [[package]]
 name = "bridge-types"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=evm-fungible-app#5dc15b832c12c7640877e7e5ee37356ae6dfd916"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.24#cfedc198af9f89463f91c55d9fdd174082391dc0"
 dependencies = [
  "derivative",
  "ethabi 17.2.0",
@@ -1277,7 +1277,7 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-network.git?branch=evm-bridge#f5b0145ca75b23e010a70fb708f56e773928c3cb"
+source = "git+https://github.com/sora-xor//sora2-network.git?tag=3.4.0#47a7f6d7dbe663d31d686d961786cfc9d239bf85"
 dependencies = [
  "blake2-rfc",
  "bridge-types",
@@ -3971,7 +3971,7 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 [[package]]
 name = "leaf-provider-rpc"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=evm-fungible-app#5dc15b832c12c7640877e7e5ee37356ae6dfd916"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.24#cfedc198af9f89463f91c55d9fdd174082391dc0"
 dependencies = [
  "jsonrpsee",
  "leaf-provider-runtime-api",
@@ -3988,7 +3988,7 @@ dependencies = [
 [[package]]
 name = "leaf-provider-runtime-api"
 version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=evm-fungible-app#5dc15b832c12c7640877e7e5ee37356ae6dfd916"
+source = "git+https://github.com/sora-xor//sora2-common.git?tag=1.0.24#cfedc198af9f89463f91c55d9fdd174082391dc0"
 dependencies = [
  "bridge-types",
  "parity-scale-codec",
