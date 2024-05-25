@@ -39,7 +39,7 @@ pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    eth: EthereumClient,
+    eth: EvmClient,
     /// Signer for bridge messages
     #[clap(long)]
     account_id: AccountId32,
@@ -51,7 +51,7 @@ pub(crate) struct Command {
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
-        let eth = self.eth.get_signed_ethereum().await?;
+        let eth = self.eth.get_signed_evm().await?;
         let sub = self.sub.get_unsigned_substrate().await?;
         let chain_id = eth.chainid().await?;
         debug!("Eth chain id = {}", chain_id);

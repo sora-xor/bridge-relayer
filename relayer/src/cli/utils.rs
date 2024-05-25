@@ -125,42 +125,39 @@ impl ParachainClient {
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct EthereumClient {
+pub struct EvmClient {
     #[clap(from_global)]
-    ethereum_key: Option<String>,
+    evm_key: Option<String>,
     #[clap(from_global)]
-    ethereum_key_file: Option<String>,
+    evm_key_file: Option<String>,
     #[clap(from_global)]
-    ethereum_url: Option<Url>,
+    evm_url: Option<Url>,
     #[clap(from_global)]
     gas_metrics_path: Option<PathBuf>,
 }
 
-impl EthereumClient {
+impl EvmClient {
     pub fn get_key_string(&self) -> AnyResult<String> {
-        match (&self.ethereum_key, &self.ethereum_key_file) {
+        match (&self.evm_key, &self.evm_key_file) {
             (Some(_), Some(_)) => Err(CliError::BothKeyTypesProvided.into()),
-            (None, None) => Err(CliError::EthereumKey.into()),
+            (None, None) => Err(CliError::EvmKey.into()),
             (Some(key), _) => Ok(key.clone()),
             (_, Some(key_file)) => Ok(std::fs::read_to_string(key_file)?),
         }
     }
 
     pub fn get_url(&self) -> AnyResult<Url> {
-        Ok(self
-            .ethereum_url
-            .clone()
-            .ok_or(CliError::EthereumEndpoint)?)
+        Ok(self.evm_url.clone().ok_or(CliError::EvmEndpoint)?)
     }
 
-    pub async fn get_unsigned_ethereum(&self) -> AnyResult<EthUnsignedClient> {
+    pub async fn get_unsigned_evm(&self) -> AnyResult<EthUnsignedClient> {
         let eth = EthUnsignedClient::new(self.get_url()?).await?;
         Ok(eth)
     }
 
-    pub async fn get_signed_ethereum(&self) -> AnyResult<EthSignedClient> {
+    pub async fn get_signed_evm(&self) -> AnyResult<EthSignedClient> {
         let eth = self
-            .get_unsigned_ethereum()
+            .get_unsigned_evm()
             .await?
             .sign_with_string(
                 self.get_key_string()?.as_str(),
@@ -170,13 +167,11 @@ impl EthereumClient {
         Ok(eth)
     }
 
-    pub async fn get_ethereum(
-        &self,
-    ) -> AnyResult<either::Either<EthUnsignedClient, EthSignedClient>> {
-        if self.ethereum_key.is_none() && self.ethereum_key_file.is_none() {
-            Ok(Either::Left(self.get_unsigned_ethereum().await?))
+    pub async fn get_evm(&self) -> AnyResult<either::Either<EthUnsignedClient, EthSignedClient>> {
+        if self.evm_key.is_none() && self.evm_key_file.is_none() {
+            Ok(Either::Left(self.get_unsigned_evm().await?))
         } else {
-            Ok(Either::Right(self.get_signed_ethereum().await?))
+            Ok(Either::Right(self.get_signed_evm().await?))
         }
     }
 }

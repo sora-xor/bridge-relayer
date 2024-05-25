@@ -52,7 +52,7 @@ pub struct Cli {
     #[clap(flatten)]
     para: ParachainClient,
     #[clap(flatten)]
-    eth: EthereumClient,
+    eth: EvmClient,
     /// Substrate account derive URI
     #[clap(long, global = true)]
     substrate_key: Option<String>,
@@ -80,15 +80,15 @@ pub struct Cli {
     /// Liberland node endpoint
     #[clap(long, global = true)]
     liberland_url: Option<String>,
-    /// Ethereum private key
+    /// EVM private key
     #[clap(long, global = true)]
-    ethereum_key: Option<String>,
-    /// File with Ethereum private key
+    evm_key: Option<String>,
+    /// File with EVM private key
     #[clap(long, global = true)]
-    ethereum_key_file: Option<String>,
-    /// Ethereum node endpoint
+    evm_key_file: Option<String>,
+    /// EVM node endpoint
     #[clap(long, global = true)]
-    ethereum_url: Option<Url>,
+    evm_url: Option<Url>,
     /// Path for gas estimations
     #[clap(long, global = true)]
     gas_metrics_path: Option<PathBuf>,
