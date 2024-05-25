@@ -37,7 +37,7 @@ pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    eth: EthereumClient,
+    eth: EvmClient,
     #[clap(subcommand)]
     apps: Apps,
 }
@@ -78,7 +78,7 @@ pub(crate) enum Apps {
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
-        let eth = self.eth.get_unsigned_ethereum().await?;
+        let eth = self.eth.get_unsigned_evm().await?;
         let sub = self.sub.get_signed_substrate().await?;
         let network_id = eth.chainid().await?;
         if self.check_if_registered(&sub, network_id).await? {

@@ -35,7 +35,7 @@ use sp_core::crypto::Ss58Codec;
 #[derive(Args, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
-    eth: EthereumClient,
+    eth: EvmClient,
     /// EthApp contract address
     #[clap(long)]
     channel_address: H160,
@@ -57,7 +57,7 @@ impl Command {
                 Ok(acc)
             })?;
         info!("Peers: {:?}", peers);
-        let eth = self.eth.get_signed_ethereum().await?;
+        let eth = self.eth.get_signed_evm().await?;
         let channel = ethereum_gen::ChannelHandler::new(self.channel_address, eth.inner());
         let call = channel.reset(peers);
         info!("Reset {:?}", call.tx.to());

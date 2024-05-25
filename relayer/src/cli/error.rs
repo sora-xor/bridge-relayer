@@ -34,10 +34,10 @@ use thiserror::Error;
 pub enum CliError {
     #[error("Both file and arg key provided")]
     BothKeyTypesProvided,
-    #[error("Provide ethereum endpoint via --ethereum-url")]
-    EthereumEndpoint,
-    #[error("Provide ethereum key via --ethereum-key or --ethereum-key-file")]
-    EthereumKey,
+    #[error("Provide evm endpoint via --evm-url")]
+    EvmEndpoint,
+    #[error("Provide evm key via --evm-key or --evm-key-file")]
+    EvmKey,
     #[error("Provide substrate endpoint via --substrate-url")]
     SubstrateEndpoint,
     #[error("Provide substrate key via --substrate-key or --substrate-key-file")]
