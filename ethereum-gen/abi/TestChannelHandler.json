@@ -236,6 +236,19 @@
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "peers",
+        "type": "uint256"
+      }
+    ],
+    "name": "Reseted",
+    "type": "event"
+  },
+  {
     "inputs": [],
     "name": "GAS_BUFFER",
     "outputs": [
