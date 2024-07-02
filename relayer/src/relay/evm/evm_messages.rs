@@ -84,7 +84,7 @@ impl SubstrateMessagesRelay {
     }
 
     pub async fn handle_messages(&mut self) -> AnyResult<()> {
-        let current_eth_block = self.eth.get_block_number().await?.as_u64();
+        let current_eth_block = self.eth.get_finalized_block_number().await?;
         if current_eth_block < self.latest_channel_block {
             debug!("Skip handling channel messages, current block number is less than latest basic {} < {}", current_eth_block, self.latest_channel_block);
             return Ok(());
@@ -351,8 +351,21 @@ impl SubstrateMessagesRelay {
     }
 
     pub async fn run(mut self) -> AnyResult<()> {
-        let current_eth_block = self.eth.get_block_number().await?.as_u64();
+        let current_eth_block = self.eth.get_finalized_block_number().await?;
+
         self.latest_channel_block = current_eth_block.saturating_sub(BLOCKS_TO_INITIAL_SEARCH);
+        let inbound_channel = ethereum_gen::ChannelHandler::new(self.channel, self.eth.inner());
+        let events: Vec<(ethereum_gen::channel_handler::ResetedFilter, LogMeta)> = inbound_channel
+            .reseted_filter()
+            .from_block(self.latest_channel_block)
+            .to_block(current_eth_block)
+            .query_with_meta()
+            .await?;
+        self.latest_channel_block = events
+            .into_iter()
+            .map(|(_log, meta)| meta.block_number.as_u64())
+            .max()
+            .unwrap_or(self.latest_channel_block);
         loop {
             debug!("Handle channel messages");
             if let Err(err) = self.handle_messages().await {

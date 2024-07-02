@@ -102,6 +102,16 @@ impl UnsignedClient {
         let network_id = EVMChainId::from(network_id);
         Ok(network_id)
     }
+
+    pub async fn get_finalized_block_number(&self) -> AnyResult<u64> {
+        let block = self
+            .get_block(ethers::types::BlockNumber::Finalized)
+            .await?
+            .ok_or(anyhow!("Finalized block not found"))?;
+        let block_number = block.number.ok_or(anyhow!("Block number not found"))?;
+
+        Ok(block_number.as_u64())
+    }
 }
 
 #[derive(Clone, Debug)]
