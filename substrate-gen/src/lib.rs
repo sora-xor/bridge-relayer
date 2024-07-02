@@ -63,7 +63,7 @@ pub enum BridgeSignatureVersion {
     V2,
 }
 
-pub type MaxU32 = sp_runtime::traits::ConstU32<{ core::u32::MAX }>;
+pub type MaxU32 = sp_runtime::traits::ConstU32<{ u32::MAX }>;
 pub type UnboundedBridgeMessage = bridge_types::substrate::BridgeMessage<MaxU32>;
 pub type UnboundedGenericCommitment = bridge_types::GenericCommitment<MaxU32, MaxU32>;
 pub type UnboundedGenericCommitmentWithBlock<BlockNumber> =
@@ -136,7 +136,7 @@ pub mod runtime {
     use ::common::AssetSymbol;
     #[subxt(substitute_type = "common::primitives::LiquiditySourceType")]
     use ::common::LiquiditySourceType;
-    #[subxt(substitute_type = "common::primitives::PredefinedAssetId")]
+    #[subxt(substitute_type = "common::primitives::_allowed_deprecated::PredefinedAssetId")]
     use ::common::PredefinedAssetId;
     #[subxt(substitute_type = "common::primitives::RewardReason")]
     use ::common::RewardReason;

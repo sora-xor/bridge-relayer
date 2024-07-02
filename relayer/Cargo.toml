@@ -8,8 +8,8 @@ ethereum-gen = { path = "../ethereum-gen" }
 substrate-gen = { path = "../substrate-gen" }
 parachain-gen = { path = "../parachain-gen" }
 liberland-gen = { path = "../liberland-gen" }
-beefy-light-client = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18", default-features = false }
-bridge-common = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18", default-features = false }
+beefy-light-client = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
+bridge-common = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
 bridge-types = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
 leaf-provider-rpc = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
 ethers = { version = "2.0.0", features = [
@@ -37,7 +37,7 @@ keccak-hasher = "0.16.0"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 futures = "0.3.17"
-ethash = { git = "https://github.com/sora-xor/ethash.git", branch = "sora-v1.6.0", default-features = false }
+ethash = { git = "https://github.com/sora-xor/ethash.git", branch = "sora-v1.6.0" }
 log = "0.4.14"
 env_logger = "0.9.0"
 sha3 = "0.10"
@@ -53,9 +53,9 @@ pallet-beefy-mmr = { git = "https://github.com/sora-xor/substrate.git", branch =
 mmr-rpc = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 sp-mmr-primitives = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 beefy-gadget-rpc = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
-sp-core = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38", default-features = false }
-sp-runtime = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38", default-features = false }
-codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
+sp-core = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
+sp-runtime = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
+codec = { package = "parity-scale-codec", version = "3", features = [
   "derive",
   "chain-error",
 ] }
@@ -64,6 +64,10 @@ lru = "0.12"
 k256 = "0.13.1"
 assets-rpc = { git = "https://github.com/sora-xor/sora2-network.git" }
 assets-runtime-api = { git = "https://github.com/sora-xor/sora2-network.git" }
-eth-bridge = { git = "https://github.com/sora-xor/sora2-network.git" }
 rand = "0.8.5"
-mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2", default-features = false }
+mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2" }
+substrate-bip39 = "=0.4.5"
+secp256k1 = { version = "0.7", features = [
+    'hmac',
+], default-features = false, package = "libsecp256k1" }
+either = "1.11.0"

@@ -28,25 +28,25 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod beefy;
-mod channels;
+mod initialize_channel;
+mod reset_channel;
 
 use crate::cli::prelude::*;
 use clap::*;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
-    /// Reset BEEFY light client contract
-    BEEFY(beefy::Command),
-    /// Reset channels contracts
-    Channels(channels::Command),
+    /// Initialize channel contract
+    InitializeChannels(initialize_channel::Command),
+    /// Reset channel contract
+    ResetChannels(reset_channel::Command),
 }
 
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
-            Commands::BEEFY(cmd) => cmd.run().await,
-            Commands::Channels(cmd) => cmd.run().await,
+            Commands::ResetChannels(cmd) => cmd.run().await,
+            Commands::InitializeChannels(cmd) => cmd.run().await,
         }
     }
 }

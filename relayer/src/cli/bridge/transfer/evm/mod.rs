@@ -28,39 +28,21 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::cli::prelude::*;
-use bridge_types::H160;
+mod sora;
 
-#[derive(Args, Debug)]
-pub(crate) struct Command {
-    #[clap(flatten)]
-    eth: EthereumClient,
-    /// EthApp contract address
-    #[clap(long)]
-    eth_app: H160,
+use crate::cli::prelude::*;
+use clap::*;
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum Commands {
+    /// EVM to SORA relay
+    Sora(sora::Command),
 }
 
-impl Command {
-    pub(super) async fn run(&self) -> AnyResult<()> {
-        let eth = self.eth.get_signed_ethereum().await?;
-        let eth_app = ethereum_gen::ETHApp::new(self.eth_app.clone(), eth.inner());
-        let inbound_channel_address = eth_app.inbound().call().await?;
-        let outbound_channel_address = eth_app.outbound().call().await?;
-        let inbound_channel =
-            ethereum_gen::InboundChannel::new(inbound_channel_address, eth.inner());
-        let outbound_channel =
-            ethereum_gen::OutboundChannel::new(outbound_channel_address, eth.inner());
-        for call in [inbound_channel.reset(), outbound_channel.reset()] {
-            info!("Reset {:?}", call.tx.to());
-            let call = call.legacy().from(eth.address());
-            debug!("Static call: {:?}", call);
-            call.call().await?;
-            debug!("Send transaction");
-            let pending = call.send().await?;
-            debug!("Pending transaction: {:?}", pending);
-            let result = pending.await?;
-            debug!("Confirmed: {:?}", result);
+impl Commands {
+    pub async fn run(&self) -> AnyResult<()> {
+        match self {
+            Commands::Sora(cmd) => cmd.run().await,
         }
-        Ok(())
     }
 }

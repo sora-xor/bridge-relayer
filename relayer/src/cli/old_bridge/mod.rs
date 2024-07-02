@@ -33,8 +33,6 @@ mod migrate;
 mod prepare_migration;
 mod register_assets;
 mod register_bridge;
-mod relay;
-mod send_to_sora;
 
 use bridge_types::H160;
 
@@ -45,10 +43,6 @@ use crate::substrate::AssetId;
 pub enum Commands {
     /// Download registered asset list
     DumpAssets(dump_assets::Command),
-    /// Send messages from Sora to Ethereum
-    Relay(relay::Command),
-    /// Send tokens from Ethereum to Sora
-    SendToSora(send_to_sora::Command),
     /// Register assets
     RegisterAssets(register_assets::Command),
     /// Register bridge
@@ -63,8 +57,6 @@ impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
             Self::DumpAssets(cmd) => cmd.run().await,
-            Self::Relay(cmd) => cmd.run().await,
-            Self::SendToSora(cmd) => cmd.run().await,
             Self::RegisterAssets(cmd) => cmd.run().await,
             Self::RegisterBridge(cmd) => cmd.run().await,
             Self::Migrate(cmd) => cmd.run().await,

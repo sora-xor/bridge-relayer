@@ -43,12 +43,12 @@ pub(super) struct Command {
     #[clap(long)]
     dry_run: bool,
     #[clap(flatten)]
-    eth: EthereumClient,
+    eth: EvmClient,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
-        let eth = self.eth.get_signed_ethereum().await?;
+        let eth = self.eth.get_signed_evm().await?;
         let token = ethereum_gen::TestToken::new(self.token, eth.inner());
         let balance = token.balance_of(eth.address()).call().await?;
         let name = token.name().call().await?;

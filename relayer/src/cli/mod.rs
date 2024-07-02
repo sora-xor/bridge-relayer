@@ -29,10 +29,8 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod bridge;
-mod calc_dag_roots;
 mod copy_liquidity;
 mod error;
-mod fetch_ethereum_header;
 mod mint_test_token;
 mod old_bridge;
 mod subscribe_beefy;
@@ -54,7 +52,7 @@ pub struct Cli {
     #[clap(flatten)]
     para: ParachainClient,
     #[clap(flatten)]
-    eth: EthereumClient,
+    eth: EvmClient,
     /// Substrate account derive URI
     #[clap(long, global = true)]
     substrate_key: Option<String>,
@@ -82,15 +80,15 @@ pub struct Cli {
     /// Liberland node endpoint
     #[clap(long, global = true)]
     liberland_url: Option<String>,
-    /// Ethereum private key
+    /// EVM private key
     #[clap(long, global = true)]
-    ethereum_key: Option<String>,
-    /// File with Ethereum private key
+    evm_key: Option<String>,
+    /// File with EVM private key
     #[clap(long, global = true)]
-    ethereum_key_file: Option<String>,
-    /// Ethereum node endpoint
+    evm_key_file: Option<String>,
+    /// EVM node endpoint
     #[clap(long, global = true)]
-    ethereum_url: Option<Url>,
+    evm_url: Option<Url>,
     /// Path for gas estimations
     #[clap(long, global = true)]
     gas_metrics_path: Option<PathBuf>,
@@ -108,8 +106,6 @@ impl Cli {
 enum Commands {
     /// Subscribe beefy to new commitments
     SubscribeBeefy(subscribe_beefy::Command),
-    /// Fetch Ethereum header
-    FetchEthereumHeader(fetch_ethereum_header::Command),
     /// Mint test token (work for tokens with mint method)
     MintTestToken(mint_test_token::Command),
     /// Operations with bridge
@@ -118,8 +114,6 @@ enum Commands {
     /// Operations with old bridge
     #[clap(subcommand)]
     OldBridge(old_bridge::Commands),
-    /// Calculate DAG roots for light client
-    CalcDagRoots(calc_dag_roots::Command),
     CopyLiquidity(copy_liquidity::Command),
 }
 
@@ -127,11 +121,9 @@ impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
             Self::SubscribeBeefy(cmd) => cmd.run().await,
-            Self::FetchEthereumHeader(cmd) => cmd.run().await,
             Self::MintTestToken(cmd) => cmd.run().await,
             Self::Bridge(cmd) => cmd.run().await,
             Self::OldBridge(cmd) => cmd.run().await,
-            Self::CalcDagRoots(cmd) => cmd.run().await,
             Self::CopyLiquidity(cmd) => cmd.run().await,
         }
     }

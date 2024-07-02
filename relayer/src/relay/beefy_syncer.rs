@@ -55,6 +55,7 @@ impl BeefySyncer {
         self.latest_sent.load(Ordering::Relaxed)
     }
 
+    #[allow(dead_code)]
     pub fn update_latest_requested(&self, block: u64) {
         self.latest_requested
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
