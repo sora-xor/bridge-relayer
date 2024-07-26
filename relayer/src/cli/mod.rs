@@ -89,6 +89,15 @@ pub struct Cli {
     /// EVM node endpoint
     #[clap(long, global = true)]
     evm_url: Option<Url>,
+    /// TON mnemonic
+    #[clap(long, global = true)]
+    ton_key: Option<String>,
+    /// File with TON mnemonic
+    #[clap(long, global = true)]
+    ton_key_file: Option<String>,
+    /// TON HTTP API Url
+    #[clap(long, global = true)]
+    ton_url: Option<Url>,
     /// Path for gas estimations
     #[clap(long, global = true)]
     gas_metrics_path: Option<PathBuf>,

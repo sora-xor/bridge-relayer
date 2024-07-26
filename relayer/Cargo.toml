@@ -12,10 +12,7 @@ beefy-light-client = { git = "https://github.com/sora-xor/sora2-common.git", tag
 bridge-common = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
 bridge-types = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
 leaf-provider-rpc = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
-ethers = { version = "2.0.0", features = [
-  "ws",
-  "rustls",
-] }
+ethers = { version = "2.0.0", features = ["ws", "rustls"] }
 ethers-core = "=2.0.0"
 common = { git = "https://github.com/sora-xor/sora2-network.git" }
 subxt = { version = "0.25.0" }
@@ -68,6 +65,13 @@ rand = "0.8.5"
 mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2" }
 substrate-bip39 = "=0.4.5"
 secp256k1 = { version = "0.7", features = [
-    'hmac',
+  'hmac',
 ], default-features = false, package = "libsecp256k1" }
 either = "1.11.0"
+reqwest = "=0.11.22"
+serde_with = { version = "3.9.0", features = ["hex", "base64"] }
+toner = "0.2.22"
+lazy_static = "1.5.0"
+chrono = "0.4.38"
+num-bigint = "0.4.6"
+base64 = "0.22.1"

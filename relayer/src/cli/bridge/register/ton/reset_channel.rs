@@ -28,44 +28,40 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// TODO #167: fix clippy warnings
-#![allow(clippy::all)]
-mod evm;
-mod liberland;
-mod parachain;
-mod sora;
-mod ton;
-
 use crate::cli::prelude::*;
-use clap::*;
+use toner::{
+    tlb::{bits::ser::BitWriterExt, ser::CellSerialize},
+    ton::MsgAddress,
+};
 
-#[derive(Debug, Subcommand)]
-pub(crate) enum Commands {
-    /// Relay commands from EVM to another networks
-    #[clap(subcommand)]
-    EVM(evm::Commands),
-    /// Relay commands from SORA to another networks
-    #[clap(subcommand)]
-    Sora(sora::Commands),
-    /// Relay commands from parachain to another networks
-    #[clap(subcommand)]
-    Parachain(parachain::Commands),
-    /// Relay commands from liberland to another networks
-    #[clap(subcommand)]
-    Liberland(liberland::Commands),
-    /// Relay commands from TON to another networks
-    #[clap(subcommand)]
-    TON(ton::Commands),
+#[derive(Args, Debug)]
+pub(crate) struct Command {
+    #[clap(flatten)]
+    ton: TonClientCli,
+    /// Channel contract address
+    #[clap(long)]
+    channel: MsgAddress,
 }
 
-impl Commands {
-    pub async fn run(&self) -> AnyResult<()> {
-        match self {
-            Commands::EVM(cmd) => cmd.run().await,
-            Commands::Sora(cmd) => cmd.run().await,
-            Commands::Parachain(cmd) => cmd.run().await,
-            Commands::Liberland(cmd) => cmd.run().await,
-            Commands::TON(cmd) => cmd.run().await,
-        }
+pub struct ResetChannelOp;
+
+const RESET_CHANNEL_OP: u32 = 1431274889;
+
+impl CellSerialize for ResetChannelOp {
+    fn store(
+        &self,
+        builder: &mut toner::tlb::ser::CellBuilder,
+    ) -> Result<(), toner::tlb::ser::CellBuilderError> {
+        builder.pack(RESET_CHANNEL_OP)?;
+        Ok(())
+    }
+}
+
+impl Command {
+    pub(super) async fn run(&self) -> AnyResult<()> {
+        let ton = self.ton.get_signed_ton()?;
+        ton.submit(ResetChannelOp, self.channel, 200_000_000u64.into(), true)
+            .await?;
+        Ok(())
     }
 }

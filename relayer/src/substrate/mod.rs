@@ -34,6 +34,7 @@ pub mod beefy_subscription;
 pub mod traits;
 pub mod types;
 
+use std::collections::BTreeSet;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 

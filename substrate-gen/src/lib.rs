@@ -106,6 +106,10 @@ pub mod runtime {
     use ::bridge_types::log::Log;
     #[subxt(substitute_type = "bridge_types::network_config::NetworkConfig")]
     use ::bridge_types::network_config::NetworkConfig;
+    #[subxt(substitute_type = "bridge_types::ton::TonAddress")]
+    use ::bridge_types::ton::TonAddress;
+    #[subxt(substitute_type = "bridge_types::ton::TonNetworkId")]
+    use ::bridge_types::ton::TonNetworkId;
     #[subxt(substitute_type = "bridge_types::types::AssetKind")]
     use ::bridge_types::types::AssetKind;
     #[subxt(substitute_type = "bridge_types::types::AuxiliaryDigest")]
