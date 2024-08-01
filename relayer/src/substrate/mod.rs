@@ -46,7 +46,6 @@ use mmr_rpc::MmrApiClient;
 use sp_core::{ecdsa, H256};
 use sp_mmr_primitives::{EncodableOpaqueLeaf, Proof};
 use sp_runtime::traits::AtLeast32BitUnsigned;
-use std::collections::BTreeSet;
 use std::sync::RwLock;
 pub use substrate_gen::runtime;
 use subxt::blocks::ExtrinsicEvents;
