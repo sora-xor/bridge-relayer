@@ -1,15 +1,14 @@
-FROM debian:bullseye-20240513-slim
+FROM debian:bullseye-20240722-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies
 RUN apt-get update && \
     apt-get install --no-install-recommends -y \
-    ca-certificates nano curl && \
+    ca-certificates nano curl libc6 && \
     apt-get autoremove -y && \
     apt-get clean && \
-    find /var/lib/apt/lists/ -type f -not -name lock -delete &&\
-    useradd substrate -u 10000
+    find /var/lib/apt/lists/ -type f -not -name lock -delete
 
 USER substrate
 
