@@ -29,7 +29,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #![allow(clippy::too_many_arguments)]
 
-pub type MaxU32 = sp_runtime::traits::ConstU32<{ core::u32::MAX }>;
+pub type MaxU32 = sp_runtime::traits::ConstU32<{ u32::MAX }>;
 pub type UnboundedBridgeMessage = bridge_types::substrate::BridgeMessage<MaxU32>;
 pub type UnboundedGenericCommitment = bridge_types::GenericCommitment<MaxU32, MaxU32>;
 pub type UnboundedGenericCommitmentWithBlock<BlockNumber> =

@@ -28,54 +28,22 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::cli::prelude::*;
+mod evm;
 
-#[derive(Args, Clone, Debug)]
-pub(crate) struct Command {
-    #[clap(flatten)]
-    sub: SubstrateClient,
-    #[clap(flatten)]
-    liber: LiberlandClient,
-    #[clap(flatten)]
-    peers: BridgePeers,
+use crate::cli::prelude::*;
+use clap::*;
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum Commands {
+    /// Relay commands from EVM to another networks
+    #[clap(subcommand)]
+    Evm(evm::Commands),
 }
 
-impl Command {
-    pub(super) async fn run(&self) -> AnyResult<()> {
-        let sub = self.sub.get_unsigned_substrate().await?;
-        let liber = self.liber.get_signed_substrate().await?;
-
-        let peers = self.peers.ecdsa_keys()?;
-
-        let network_id = sub
-            .constant_fetch_or_default(
-                &mainnet_runtime::constants()
-                    .bridge_inbound_channel()
-                    .this_network_id(),
-            )
-            .context("Fetch this network id")?;
-
-        let call = liberland_runtime::runtime_types::kitchensink_runtime::RuntimeCall::BridgeDataSigner(
-            liberland_runtime::runtime_types::bridge_data_signer::pallet::Call::register_network {
-                network_id,
-                peers: peers.clone(),
-            },
-        );
-        info!("Submit sudo call: {call:?}");
-        let call = liberland_runtime::tx().sudo().sudo(call);
-        liber.submit_extrinsic(&call).await?;
-
-        let call =
-            liberland_runtime::runtime_types::kitchensink_runtime::RuntimeCall::MultisigVerifier(
-                liberland_runtime::runtime_types::multisig_verifier::pallet::Call::initialize {
-                    network_id,
-                    peers,
-                },
-            );
-        info!("Submit sudo call: {call:?}");
-        let call = liberland_runtime::tx().sudo().sudo(call);
-        liber.submit_extrinsic(&call).await?;
-
-        Ok(())
+impl Commands {
+    pub async fn run(&self) -> AnyResult<()> {
+        match self {
+            Commands::Evm(cmd) => cmd.run().await,
+        }
     }
 }

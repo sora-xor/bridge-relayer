@@ -28,6 +28,36 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-pub mod cache;
-pub mod dag_merkle_root;
-pub mod mtree;
+use crate::cli::prelude::*;
+use bridge_types::H160;
+
+#[derive(Args, Debug)]
+pub(crate) struct Command {
+    #[clap(flatten)]
+    eth: EvmClient,
+    /// EthApp contract address
+    #[clap(long)]
+    channel_address: H160,
+    #[clap(flatten)]
+    peers: BridgePeers,
+}
+
+impl Command {
+    pub(super) async fn run(&self) -> AnyResult<()> {
+        let peers = self.peers.evm_addresses()?;
+        info!("Peers: {:?}", peers);
+        let eth = self.eth.get_signed_evm().await?;
+        let channel = ethereum_gen::ChannelHandler::new(self.channel_address, eth.inner());
+        let call = channel.initialize(peers);
+        info!("Initialize channel {:?}", call.tx.to());
+        let call = call.legacy().from(eth.address());
+        debug!("Static call: {:?}", call);
+        call.call().await?;
+        debug!("Send transaction");
+        let pending = call.send().await?;
+        debug!("Pending transaction: {:?}", pending);
+        let result = pending.confirmations(1).await?;
+        debug!("Confirmed: {:?}", result);
+        Ok(())
+    }
+}

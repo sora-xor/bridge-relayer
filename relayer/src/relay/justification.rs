@@ -32,14 +32,12 @@
 #![allow(clippy::all)]
 
 use crate::prelude::*;
-use crate::substrate::{BeefyCommitment, BeefySignedCommitment, BlockHash, LeafProof};
+use crate::substrate::{BeefyCommitment, BeefySignedCommitment, LeafProof};
 use bridge_common::{
     bitfield::BitField,
     simplified_proof::{convert_to_simplified_mmr_proof, Proof},
 };
-use codec::Encode;
 use ethers::prelude::*;
-use ethers::utils::keccak256;
 use sp_beefy::crypto::Signature;
 use sp_beefy::SignedCommitment;
 use sp_runtime::traits::{AtLeast32Bit, Keccak256, UniqueSaturatedInto};
@@ -48,23 +46,18 @@ use sp_runtime::Saturating;
 
 #[derive(Debug)]
 pub struct MmrPayload {
-    pub prefix: Vec<u8>,
     pub mmr_root: H256,
-    pub suffix: Vec<u8>,
 }
 
 #[derive(Debug)]
 pub struct BeefyJustification<T: ConfigExt> {
     pub commitment: BeefyCommitment<T>,
-    pub commitment_hash: H256,
     pub signatures: Vec<Option<Signature>>,
     pub num_validators: u32,
     pub signed_validators: Vec<u32>,
     pub validators: Vec<H160>,
-    pub block_hash: BlockHash<T>,
     pub leaf_proof: LeafProof<T>,
     pub simplified_proof: Proof<H256>,
-    pub payload: MmrPayload,
     pub is_mandatory: bool,
 }
 
@@ -82,7 +75,6 @@ where
             signatures,
         }) = commitment;
         let commitment_block_number: u64 = commitment.block_number.clone().into();
-        let commitment_hash = keccak256(&Encode::encode(&commitment)).into();
         let num_validators = signatures.len() as u32;
         let mut signed_validators = vec![];
         for (i, signature) in (0u32..).zip(signatures.iter()) {
@@ -99,23 +91,18 @@ where
             .into_iter()
             .map(|x| H160::from_slice(&pallet_beefy_mmr::BeefyEcdsaToEthereum::convert(x)))
             .collect();
-        let block_hash = sub.block_hash(commitment_block_number).await?.into();
-
         let payload = Self::get_payload(&commitment).ok_or(anyhow!("Payload is not supported"))?;
         let (leaf_proof, simplified_proof) =
             Self::find_mmr_proof(&sub, &commitment, payload.mmr_root).await?;
 
         Ok(Self {
             commitment,
-            commitment_hash,
             num_validators,
             signed_validators,
             signatures,
             validators,
-            block_hash,
             leaf_proof,
             simplified_proof,
-            payload,
             is_mandatory,
         })
     }
@@ -157,21 +144,8 @@ where
             .get_raw(&sp_beefy::known_payloads::MMR_ROOT_ID)
             .and_then(|x| x.clone().try_into().ok())
             .and_then(|mmr_root: [u8; 32]| {
-                let payload = hex::encode(commitment.payload.encode());
-                let mmr_root_with_id = hex::encode(
-                    (sp_beefy::known_payloads::MMR_ROOT_ID, mmr_root.to_vec()).encode(),
-                );
-                let (prefix, suffix) = if let Some(x) = payload.strip_suffix(&mmr_root_with_id) {
-                    (x, "")
-                } else if let Some(x) = payload.strip_prefix(&mmr_root_with_id) {
-                    ("", x)
-                } else {
-                    payload.split_once(&mmr_root_with_id)?
-                };
                 Some(MmrPayload {
-                    prefix: hex::decode(prefix).expect("should be ok"),
                     mmr_root: mmr_root.into(),
-                    suffix: hex::decode(suffix).expect("should be ok"),
                 })
             })
     }
@@ -195,37 +169,6 @@ where
         .proof;
         debug!("Validator {} proof: {}", pos, proof.len());
         proof
-    }
-
-    pub fn validators_proof(
-        &self,
-        initial_bitfield: Vec<U256>,
-        random_bitfield: Vec<U256>,
-    ) -> ethereum_gen::ValidatorProof {
-        let mut positions = vec![];
-        let mut signatures = vec![];
-        let mut public_keys = vec![];
-        let mut public_key_merkle_proofs = vec![];
-        for i in 0..random_bitfield.len() * 256 {
-            let bit = random_bitfield[i / 256].bit(i % 256);
-            if bit {
-                positions.push(U256::from(i));
-                signatures.push(self.validator_eth_signature(i));
-                public_keys.push(self.validator_pubkey(i));
-                public_key_merkle_proofs.push(self.validator_pubkey_proof(i));
-            }
-        }
-        let validator_proof = ethereum_gen::ValidatorProof {
-            signatures,
-            positions,
-            public_keys,
-            public_key_merkle_proofs: public_key_merkle_proofs
-                .into_iter()
-                .map(|x| x.into_iter().map(|x| x.0).collect())
-                .collect(),
-            validator_claims_bitfield: initial_bitfield,
-        };
-        validator_proof
     }
 
     pub fn validators_proof_sub(
@@ -254,33 +197,6 @@ where
             validator_claims_bitfield: initial_bitfield,
         };
         validator_proof
-    }
-
-    pub fn simplified_mmr_proof(
-        &self,
-    ) -> AnyResult<(
-        ethereum_gen::beefy_light_client::BeefyMMRLeaf,
-        ethereum_gen::beefy_light_client::SimplifiedMMRProof,
-    )> {
-        let LeafProof { leaf, .. } = self.leaf_proof.clone();
-        let (major, minor) = leaf.version.split();
-        let leaf_version = (major << 5) + minor;
-        let mmr_leaf = ethereum_gen::beefy_light_client::BeefyMMRLeaf {
-            version: leaf_version,
-            parent_number: leaf.parent_number_and_hash.0.unique_saturated_into(),
-            parent_hash: leaf.parent_number_and_hash.1.as_ref().try_into().unwrap(),
-            next_authority_set_id: leaf.beefy_next_authority_set.id,
-            next_authority_set_len: leaf.beefy_next_authority_set.len,
-            next_authority_set_root: leaf.beefy_next_authority_set.root.to_fixed_bytes(),
-            digest_hash: leaf.leaf_extra.digest_hash.0,
-            random_seed: leaf.leaf_extra.random_seed.0,
-        };
-
-        let proof = ethereum_gen::beefy_light_client::SimplifiedMMRProof {
-            merkle_proof_items: self.simplified_proof.items.iter().map(|x| x.0).collect(),
-            merkle_proof_order_bit_field: self.simplified_proof.order,
-        };
-        Ok((mmr_leaf, proof))
     }
 
     pub fn simplified_mmr_proof_sub(

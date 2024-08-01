@@ -63,6 +63,7 @@ fn init_log() {
 pub mod prelude {
     pub use crate::ethereum::{
         SignedClient as EthSignedClient, UnsignedClient as EthUnsignedClient,
+        UnsignedOrSignedClient as EthUnsignedOrSignedClient,
     };
     pub use crate::substrate::runtime::runtime_types as sub_types;
     pub use crate::substrate::traits::{
@@ -75,6 +76,7 @@ pub mod prelude {
     };
     pub use anyhow::{Context, Result as AnyResult};
     pub use codec::{Decode, Encode};
+    pub use either::Either;
     pub use hex_literal::hex;
     pub use http::Uri;
     pub use serde::{Deserialize, Serialize};

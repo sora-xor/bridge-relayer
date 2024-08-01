@@ -32,108 +32,8 @@ use std::path::PathBuf;
 
 use super::error::*;
 use crate::{prelude::*, substrate::traits::KeyPair};
-use bridge_types::network_config::NetworkConfig;
-use clap::error::ErrorKind;
 use clap::*;
-
-#[derive(Clone, Debug)]
-pub enum Network {
-    Mainnet,
-    Ropsten,
-    Sepolia,
-    Rinkeby,
-    Goerli,
-    Classic,
-    Mordor,
-    Custom { path: PathBuf },
-    None,
-}
-
-const NETWORKS: [&str; 8] = [
-    "mainnet", "ropsten", "sepolia", "rinkeby", "goerli", "classic", "mordor", "custom",
-];
-
-impl Args for Network {
-    fn augment_args(app: Command) -> Command {
-        let mut app = app;
-        for network in NETWORKS.iter() {
-            let mut arg = Arg::new(*network).long(network).required(false);
-            if *network == "custom" {
-                arg = arg.value_name("PATH").action(ArgAction::SetTrue);
-            }
-            app = app.arg(arg);
-        }
-        app
-    }
-
-    fn augment_args_for_update(app: Command) -> Command {
-        Self::augment_args(app)
-    }
-}
-
-impl FromArgMatches for Network {
-    fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
-        let mut network = None;
-        let mut occurrences = 0;
-        for network_name in NETWORKS.iter() {
-            if matches.contains_id(network_name) {
-                occurrences += 1;
-                if occurrences > 1 {
-                    return Err(Error::raw(
-                        ErrorKind::ArgumentConflict,
-                        "Only one network can be specified at a time",
-                    ));
-                }
-                network = Some(match *network_name {
-                    "mainnet" => Network::Mainnet,
-                    "ropsten" => Network::Ropsten,
-                    "sepolia" => Network::Sepolia,
-                    "rinkeby" => Network::Rinkeby,
-                    "goerli" => Network::Goerli,
-                    "classic" => Network::Classic,
-                    "mordor" => Network::Mordor,
-                    "custom" => {
-                        let path: &String = matches.get_one(network_name).expect("required value");
-                        Network::Custom {
-                            path: PathBuf::from(path),
-                        }
-                    }
-                    _ => unreachable!(),
-                });
-            }
-        }
-        Ok(network.unwrap_or(Network::None))
-    }
-
-    fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), Error> {
-        *self = Self::from_arg_matches(matches)?;
-        Ok(())
-    }
-}
-
-impl Network {
-    pub fn config(&self) -> AnyResult<NetworkConfig> {
-        let res = match self {
-            Network::Mainnet => NetworkConfig::Mainnet,
-            Network::Ropsten => NetworkConfig::Ropsten,
-            Network::Sepolia => NetworkConfig::Sepolia,
-            Network::Rinkeby => NetworkConfig::Rinkeby,
-            Network::Goerli => NetworkConfig::Goerli,
-            Network::Classic => NetworkConfig::Classic,
-            Network::Mordor => NetworkConfig::Mordor,
-            Network::Custom { path } => {
-                let bytes = std::fs::read(path)?;
-                serde_json::de::from_slice(&bytes)?
-            }
-            Network::None => {
-                return Err(
-                    Error::raw(ErrorKind::MissingRequiredArgument, "No network specified").into(),
-                )
-            }
-        };
-        Ok(res)
-    }
-}
+use sp_core::{crypto::Ss58Codec, H160};
 
 #[derive(Args, Debug, Clone)]
 pub struct SubstrateClient {
@@ -226,42 +126,39 @@ impl ParachainClient {
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct EthereumClient {
+pub struct EvmClient {
     #[clap(from_global)]
-    ethereum_key: Option<String>,
+    evm_key: Option<String>,
     #[clap(from_global)]
-    ethereum_key_file: Option<String>,
+    evm_key_file: Option<String>,
     #[clap(from_global)]
-    ethereum_url: Option<Url>,
+    evm_url: Option<Url>,
     #[clap(from_global)]
     gas_metrics_path: Option<PathBuf>,
 }
 
-impl EthereumClient {
+impl EvmClient {
     pub fn get_key_string(&self) -> AnyResult<String> {
-        match (&self.ethereum_key, &self.ethereum_key_file) {
+        match (&self.evm_key, &self.evm_key_file) {
             (Some(_), Some(_)) => Err(CliError::BothKeyTypesProvided.into()),
-            (None, None) => Err(CliError::EthereumKey.into()),
+            (None, None) => Err(CliError::EvmKey.into()),
             (Some(key), _) => Ok(key.clone()),
             (_, Some(key_file)) => Ok(std::fs::read_to_string(key_file)?),
         }
     }
 
     pub fn get_url(&self) -> AnyResult<Url> {
-        Ok(self
-            .ethereum_url
-            .clone()
-            .ok_or(CliError::EthereumEndpoint)?)
+        Ok(self.evm_url.clone().ok_or(CliError::EvmEndpoint)?)
     }
 
-    pub async fn get_unsigned_ethereum(&self) -> AnyResult<EthUnsignedClient> {
+    pub async fn get_unsigned_evm(&self) -> AnyResult<EthUnsignedClient> {
         let eth = EthUnsignedClient::new(self.get_url()?).await?;
         Ok(eth)
     }
 
-    pub async fn get_signed_ethereum(&self) -> AnyResult<EthSignedClient> {
+    pub async fn get_signed_evm(&self) -> AnyResult<EthSignedClient> {
         let eth = self
-            .get_unsigned_ethereum()
+            .get_unsigned_evm()
             .await?
             .sign_with_string(
                 self.get_key_string()?.as_str(),
@@ -269,6 +166,14 @@ impl EthereumClient {
             )
             .await?;
         Ok(eth)
+    }
+
+    pub async fn get_evm(&self) -> AnyResult<either::Either<EthUnsignedClient, EthSignedClient>> {
+        if self.evm_key.is_none() && self.evm_key_file.is_none() {
+            Ok(Either::Left(self.get_unsigned_evm().await?))
+        } else {
+            Ok(Either::Right(self.get_signed_evm().await?))
+        }
     }
 }
 
@@ -314,5 +219,36 @@ impl LiberlandClient {
             ))
             .await?;
         Ok(sub)
+    }
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct BridgePeers {
+    /// Bridge peers
+    #[clap(long)]
+    peers: Vec<String>,
+}
+
+impl BridgePeers {
+    pub fn ecdsa_keys(&self) -> AnyResult<Vec<sp_core::ecdsa::Public>> {
+        self.peers.iter().try_fold(
+            vec![],
+            |mut acc, peer| -> AnyResult<Vec<sp_core::ecdsa::Public>> {
+                let pk = sp_core::ecdsa::Public::from_string(peer)?;
+                acc.push(pk);
+                Ok(acc)
+            },
+        )
+    }
+
+    pub fn evm_addresses(&self) -> AnyResult<Vec<H160>> {
+        self.ecdsa_keys()?
+            .into_iter()
+            .try_fold(vec![], |mut acc, peer| -> AnyResult<Vec<H160>> {
+                let pk = secp256k1::PublicKey::parse_compressed(&peer.0)?;
+                let address = common::eth::public_key_to_eth_address(&pk);
+                acc.push(address);
+                Ok(acc)
+            })
     }
 }

@@ -28,64 +28,84 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use sp_core::H160;
+use sp_runtime::AccountId32;
+
 use crate::cli::prelude::*;
-use crate::ethereum::make_header;
-use substrate_gen::runtime;
+use crate::substrate::AssetId;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    eth: EthereumClient,
-    /// Confirmations until block is considered finalized
-    #[clap(long, short)]
-    descendants_until_final: u64,
-    #[clap(flatten)]
-    network: Network,
+    eth: EvmClient,
+    /// Signer for bridge messages
+    #[clap(long)]
+    account_id: AccountId32,
+    #[clap(long)]
+    asset_id: AssetId,
+    #[clap(long)]
+    amount: u128,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
-        let eth = self.eth.get_unsigned_ethereum().await?;
-        let sub = self.sub.get_signed_substrate().await?;
-
-        let network_id = eth.get_chainid().await?;
-        let is_light_client_registered = sub
+        let eth = self.eth.get_signed_evm().await?;
+        let sub = self.sub.get_unsigned_substrate().await?;
+        let chain_id = eth.chainid().await?;
+        debug!("Eth chain id = {}", chain_id);
+        let Some(_channel_address) = sub
             .storage_fetch(
-                &mainnet_runtime::storage()
-                    .ethereum_light_client()
-                    .network_config(&network_id),
+                &runtime::storage()
+                    .bridge_inbound_channel()
+                    .evm_channel_addresses(chain_id),
                 (),
             )
             .await?
-            .is_some();
-
-        if !is_light_client_registered {
-            let network_config = self.network.config()?;
-            if network_id != network_config.chain_id() {
-                return Err(anyhow!(
-                    "Wrong ethereum node chain id, expected {}, actual {}",
-                    network_config.chain_id(),
-                    network_id
-                ));
-            }
-            let number = eth.get_block_number().await? - self.descendants_until_final;
-            let block = eth.get_block(number).await?.expect("block not found");
-            let header = make_header(block);
-            let call = runtime::runtime_types::framenode_runtime::RuntimeCall::EthereumLightClient(
-                runtime::runtime_types::ethereum_light_client::pallet::Call::register_network {
-                    header,
-                    network_config,
-                    initial_difficulty: Default::default(),
-                },
-            );
-            info!("Sudo call extrinsic: {:?}", call);
-            sub.submit_extrinsic(&runtime::tx().sudo().sudo(call))
-                .await?;
+        else {
+            return Err(anyhow!("Bridge channel not registered"));
+        };
+        let Some(app_address) = sub
+            .storage_fetch(
+                &runtime::storage()
+                    .evm_fungible_app()
+                    .app_addresses(chain_id),
+                (),
+            )
+            .await?
+        else {
+            return Err(anyhow!("Bridge app not registered"));
+        };
+        let Some(asset_address) = sub
+            .storage_fetch(
+                &runtime::storage()
+                    .evm_fungible_app()
+                    .token_addresses(chain_id, self.asset_id),
+                (),
+            )
+            .await?
+        else {
+            return Err(anyhow!("Asset not registered"));
+        };
+        let app = ethereum_gen::fa_app::FAApp::new(app_address, eth.inner());
+        let amount = if asset_address == H160::zero() {
+            0
         } else {
-            info!("Light client already registered");
+            self.amount
+        };
+        let mut call: ethers::contract::ContractCall<_, _> =
+            app.lock(asset_address, self.account_id.clone().into(), amount.into());
+        if asset_address == H160::zero() {
+            call = call.value(self.amount);
         }
+        info!("Static call");
+        call.call().await?;
+        info!("Submit transaction");
+        let tx = call.send().await?;
+        info!("Wait for confirmations: {:?}", tx);
+        let tx = tx.confirmations(1).await?;
+        info!("Result: {:?}", tx);
         Ok(())
     }
 }
