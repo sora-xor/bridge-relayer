@@ -2,7 +2,6 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Установите необходимые зависимости
 RUN apt-get update && \
     apt-get install --no-install-recommends -y \
     ca-certificates nano curl && \
