@@ -1,7 +1,8 @@
-FROM ubuntu:22.04
+FROM debian:bookworm-20240722-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Install dependencies
 RUN apt-get update && \
     apt-get install --no-install-recommends -y \
     ca-certificates nano curl && \
