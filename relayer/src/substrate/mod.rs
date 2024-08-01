@@ -42,8 +42,10 @@ use bridge_types::types::AuxiliaryDigest;
 use bridge_types::GenericNetworkId;
 use common::{AssetName, AssetSymbol, Balance, ContentSource, Description};
 use mmr_rpc::MmrApiClient;
+use sp_core::{ecdsa, H256};
 use sp_mmr_primitives::{EncodableOpaqueLeaf, Proof};
 use sp_runtime::traits::AtLeast32BitUnsigned;
+use std::collections::BTreeSet;
 use std::sync::RwLock;
 pub use substrate_gen::runtime;
 use subxt::blocks::ExtrinsicEvents;
@@ -638,5 +640,135 @@ impl<T: ConfigExt> Signer<T::Config> for SignedClient<T> {
 
     fn address(&self) -> Address<T> {
         self.key.address()
+    }
+}
+
+impl UnsignedClient<MainnetConfig> {
+    pub async fn submit_inbound_commitment(
+        &self,
+        signer: ecdsa::Pair,
+        sender: GenericNetworkId,
+        receiver: GenericNetworkId,
+        commitment: UnboundedGenericCommitment,
+    ) -> AnyResult<()> {
+        info!("Submit commitment {commitment:?}");
+        let message =
+            sp_runtime::traits::Keccak256::hash_of(&(sender, receiver, commitment.hash()));
+        self.approve_message(signer, sender, message).await?;
+        if self.should_send_commitment(&sender, message).await? {
+            info!("Sending commitment");
+            let approvals = self.bridge_approvals(&sender, message).await?;
+            let proof = VerifierMultiProof::EVMMultisig(
+                runtime::runtime_types::multisig_verifier::MultiEVMProof {
+                    proof: approvals.try_into().unwrap(),
+                },
+            );
+            let success = self
+                .submit_concurrent_unsigned_extrinsic(
+                    &runtime::tx()
+                        .bridge_inbound_channel()
+                        .submit(sender, commitment, proof),
+                )
+                .await?;
+            if success {
+                info!("Commitment submitted by this relayer");
+            } else {
+                info!("Commitment will be submitted by another relayer");
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn approve_message(
+        &self,
+        signer: ecdsa::Pair,
+        sender: GenericNetworkId,
+        message: H256,
+    ) -> AnyResult<()> {
+        if self
+            .should_send_approval(&sender, signer.public(), message)
+            .await?
+        {
+            info!("Sending approval");
+            let signature = signer.sign_prehashed(&message.0);
+            self.submit_unsigned_extrinsic(
+                &runtime::tx()
+                    .bridge_data_signer()
+                    .approve(sender, message, signature),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn should_send_approval(
+        &self,
+        network_id: &GenericNetworkId,
+        signer: ecdsa::Public,
+        message: H256,
+    ) -> AnyResult<bool> {
+        let peers = self.bridge_peers(network_id).await?;
+        let approvals = self.bridge_approvals(network_id, message).await?;
+        let is_already_approved = approvals
+            .iter()
+            .filter_map(|approval| approval.recover_prehashed(&message.0))
+            .any(|public| signer == public);
+        Ok(
+            (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32)
+                && !is_already_approved,
+        )
+    }
+
+    pub async fn should_send_commitment(
+        &self,
+        network_id: &GenericNetworkId,
+        message: H256,
+    ) -> AnyResult<bool> {
+        let peers = self.bridge_peers(network_id).await?;
+        let approvals = self.bridge_approvals(network_id, message).await?;
+        Ok((approvals.len() as u32) >= bridge_types::utils::threshold(peers.len() as u32))
+    }
+
+    pub async fn bridge_approvals(
+        &self,
+        network_id: &GenericNetworkId,
+        message: H256,
+    ) -> AnyResult<Vec<ecdsa::Signature>> {
+        let peers = self.bridge_peers(network_id).await?;
+        let approvals = self
+            .storage_fetch_or_default(
+                &runtime::storage()
+                    .bridge_data_signer()
+                    .approvals(network_id, message),
+                (),
+            )
+            .await?;
+        let mut acceptable_approvals = vec![];
+        for approval in approvals {
+            let public = approval
+                .1
+                .recover_prehashed(&message.0)
+                .ok_or(anyhow!("Wrong signature in data signer pallet"))?;
+            if peers.contains(&public) {
+                acceptable_approvals.push(approval.1);
+            }
+        }
+        Ok(acceptable_approvals)
+    }
+
+    pub async fn bridge_peers(
+        &self,
+        network_id: &GenericNetworkId,
+    ) -> AnyResult<BTreeSet<ecdsa::Public>> {
+        let peers = self
+            .storage_fetch(
+                &runtime::storage().multisig_verifier().peer_keys(network_id),
+                (),
+            )
+            .await?
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        Ok(peers)
     }
 }

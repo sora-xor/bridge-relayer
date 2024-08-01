@@ -33,6 +33,7 @@ use std::path::PathBuf;
 use super::error::*;
 use crate::{prelude::*, substrate::traits::KeyPair};
 use clap::*;
+use sp_core::{crypto::Ss58Codec, H160};
 
 #[derive(Args, Debug, Clone)]
 pub struct SubstrateClient {
@@ -218,5 +219,36 @@ impl LiberlandClient {
             ))
             .await?;
         Ok(sub)
+    }
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct BridgePeers {
+    /// Bridge peers
+    #[clap(long)]
+    peers: Vec<String>,
+}
+
+impl BridgePeers {
+    pub fn ecdsa_keys(&self) -> AnyResult<Vec<sp_core::ecdsa::Public>> {
+        self.peers.iter().try_fold(
+            vec![],
+            |mut acc, peer| -> AnyResult<Vec<sp_core::ecdsa::Public>> {
+                let pk = sp_core::ecdsa::Public::from_string(peer)?;
+                acc.push(pk);
+                Ok(acc)
+            },
+        )
+    }
+
+    pub fn evm_addresses(&self) -> AnyResult<Vec<H160>> {
+        self.ecdsa_keys()?
+            .into_iter()
+            .try_fold(vec![], |mut acc, peer| -> AnyResult<Vec<H160>> {
+                let pk = secp256k1::PublicKey::parse_compressed(&peer.0)?;
+                let address = common::eth::public_key_to_eth_address(&pk);
+                acc.push(address);
+                Ok(acc)
+            })
     }
 }

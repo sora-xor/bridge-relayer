@@ -28,9 +28,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::collections::BTreeSet;
-use std::time::Duration;
-
 use crate::ethereum::EthLogDecode;
 use crate::ethereum::SignedClientInner;
 use crate::ethereum::UnsignedClientInner;
@@ -45,6 +42,7 @@ use ethers::abi::RawLog;
 use ethers::abi::Tokenize;
 use ethers::providers::Middleware;
 use sp_core::{ecdsa, H256};
+use std::time::Duration;
 
 pub struct RelayBuilder {
     sender: Option<SubUnsignedClient<MainnetConfig>>,
@@ -167,7 +165,10 @@ impl Relay {
         };
         let batch = Self::prepare_batch(&commitment);
         let messages_total_gas = commitment.total_max_gas;
-        let approvals = self.approvals(signed_message).await?;
+        let approvals = self
+            .sub
+            .bridge_approvals(&self.evm_network_id, signed_message)
+            .await?;
         let (v, r, s) = approvals
             .into_iter()
             .map(|approval| {
@@ -261,35 +262,18 @@ impl Relay {
         };
         let message = self.prepare_message_to_sign(&commitment);
         if let Some(signer) = &self.signer {
-            if self.should_send_approval(message).await? {
-                let signature = signer.sign_prehashed(&message.0);
-                self.sub
-                    .submit_unsigned_extrinsic(&runtime::tx().bridge_data_signer().approve(
-                        self.evm_network_id,
-                        message,
-                        signature,
-                    ))
-                    .await?;
-            }
+            self.sub
+                .approve_message(signer.clone(), self.evm_network_id, message)
+                .await?;
         }
-        if self.should_send_commitment(message).await? {
+        if self
+            .sub
+            .should_send_commitment(&self.evm_network_id, message)
+            .await?
+        {
             self.send_commitment(commitment, message).await?;
         }
         Ok(())
-    }
-
-    async fn should_send_approval(&self, message: H256) -> AnyResult<bool> {
-        let signer_public = self.signer_public()?;
-        let peers = self.receiver_peers().await?;
-        let approvals = self.approvals(message).await?;
-        let is_already_approved = approvals
-            .iter()
-            .filter_map(|approval| approval.recover_prehashed(&message.0))
-            .any(|public| signer_public == public);
-        Ok(
-            (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32)
-                && !is_already_approved,
-        )
     }
 
     fn signer_public(&self) -> AnyResult<ecdsa::Public> {
@@ -303,54 +287,8 @@ impl Relay {
 
     async fn is_peer(&self) -> AnyResult<bool> {
         let signer_public = self.signer_public()?;
-        let peers = self.receiver_peers().await?;
+        let peers = self.sub.bridge_peers(&self.evm_network_id).await?;
         Ok(peers.iter().any(|public| signer_public == *public))
-    }
-
-    async fn should_send_commitment(&self, message: H256) -> AnyResult<bool> {
-        let peers = self.receiver_peers().await?;
-        let approvals = self.approvals(message).await?;
-        Ok((approvals.len() as u32) >= bridge_types::utils::threshold(peers.len() as u32))
-    }
-
-    async fn approvals(&self, message: H256) -> AnyResult<Vec<ecdsa::Signature>> {
-        let peers = self.receiver_peers().await?;
-        let approvals = self
-            .sub
-            .storage_fetch_or_default(
-                &runtime::storage()
-                    .bridge_data_signer()
-                    .approvals(self.evm_network_id, message),
-                (),
-            )
-            .await?;
-        let mut acceptable_approvals = vec![];
-        for approval in approvals {
-            let public = approval
-                .1
-                .recover_prehashed(&message.0)
-                .ok_or(anyhow!("Wrong signature in data signer pallet"))?;
-            if peers.contains(&public) {
-                acceptable_approvals.push(approval.1);
-            }
-        }
-        Ok(acceptable_approvals)
-    }
-
-    async fn receiver_peers(&self) -> AnyResult<BTreeSet<ecdsa::Public>> {
-        let peers = self
-            .sub
-            .storage_fetch(
-                &runtime::storage()
-                    .bridge_data_signer()
-                    .peers(&self.evm_network_id),
-                (),
-            )
-            .await?
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
-        Ok(peers)
     }
 
     pub async fn run(self) -> AnyResult<()> {

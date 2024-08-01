@@ -30,7 +30,6 @@
 
 use crate::cli::prelude::*;
 use bridge_types::H160;
-use sp_core::crypto::Ss58Codec;
 
 #[derive(Args, Debug)]
 pub(crate) struct Command {
@@ -39,22 +38,13 @@ pub(crate) struct Command {
     /// EthApp contract address
     #[clap(long)]
     channel_address: H160,
-    #[clap(long)]
-    peers: Vec<String>,
+    #[clap(flatten)]
+    peers: BridgePeers,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
-        let peers = self
-            .peers
-            .iter()
-            .map(|peer| sp_core::ecdsa::Public::from_string(peer.as_str()))
-            .try_fold(vec![], |mut acc, peer| -> AnyResult<Vec<H160>> {
-                let pk = secp256k1::PublicKey::parse_compressed(&peer?.0)?;
-                let address = common::eth::public_key_to_eth_address(&pk);
-                acc.push(address);
-                Ok(acc)
-            })?;
+        let peers = self.peers.evm_addresses()?;
         info!("Peers: {:?}", peers);
         let eth = self.eth.get_signed_evm().await?;
         let channel = ethereum_gen::ChannelHandler::new(self.channel_address, eth.inner());

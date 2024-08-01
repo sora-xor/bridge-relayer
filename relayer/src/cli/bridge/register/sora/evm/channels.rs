@@ -30,7 +30,6 @@
 
 use crate::cli::prelude::*;
 use bridge_types::H160;
-use sp_core::crypto::Ss58Codec;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
@@ -41,8 +40,8 @@ pub(crate) struct Command {
     /// InboundChannel contract address
     #[clap(long)]
     channel_address: H160,
-    #[clap(long)]
-    peers: Vec<String>,
+    #[clap(flatten)]
+    peers: BridgePeers,
 }
 
 impl Command {
@@ -52,17 +51,7 @@ impl Command {
 
         let network_id = eth.chainid().await?;
 
-        let peers = self
-            .peers
-            .iter()
-            .map(|peer| sp_core::ecdsa::Public::from_string(peer.as_str()))
-            .try_fold(
-                vec![],
-                |mut acc, peer| -> AnyResult<Vec<sp_core::ecdsa::Public>> {
-                    acc.push(peer?);
-                    Ok(acc)
-                },
-            )?;
+        let peers = self.peers.ecdsa_keys()?;
 
         let is_channel_registered = sub
             .storage_fetch(

@@ -28,8 +28,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use sp_core::{crypto::Ss58Codec, ecdsa};
-
 use crate::cli::prelude::*;
 
 #[derive(Args, Clone, Debug)]
@@ -38,8 +36,8 @@ pub(crate) struct Command {
     sub: SubstrateClient,
     #[clap(flatten)]
     liber: LiberlandClient,
-    #[clap(long)]
-    peers: Vec<String>,
+    #[clap(flatten)]
+    peers: BridgePeers,
 }
 
 impl Command {
@@ -47,14 +45,7 @@ impl Command {
         let sub = self.sub.get_signed_substrate().await?;
         let para = self.liber.get_unsigned_substrate().await?;
 
-        let peers = self
-            .peers
-            .iter()
-            .map(|peer| ecdsa::Public::from_string(peer.as_str()))
-            .try_fold(vec![], |mut acc, peer| -> AnyResult<Vec<ecdsa::Public>> {
-                acc.push(peer?);
-                Ok(acc)
-            })?;
+        let peers = self.peers.ecdsa_keys()?;
 
         let network_id = para
             .constant_fetch_or_default(

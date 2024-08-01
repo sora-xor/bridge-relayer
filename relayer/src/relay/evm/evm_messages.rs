@@ -28,7 +28,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::collections::BTreeSet;
 use std::time::Duration;
 
 use bridge_types::evm::{BaseFeeUpdate, InboundCommitment, StatusReport};
@@ -131,7 +130,14 @@ impl SubstrateMessagesRelay {
             }),
         );
         info!("Submitting base fee update: {}", base_fee);
-        self.submit_commitment(commitment).await?;
+        self.sub
+            .submit_inbound_commitment(
+                self.signer.clone(),
+                self.evm_network_id,
+                self.sub_network_id,
+                commitment,
+            )
+            .await?;
         Ok(())
     }
 
@@ -179,115 +185,19 @@ impl SubstrateMessagesRelay {
                     }),
                 );
                 info!("Submit commitment: {}", commitment.nonce());
-                self.submit_commitment(commitment).await?;
+                self.sub
+                    .submit_inbound_commitment(
+                        self.signer.clone(),
+                        self.evm_network_id,
+                        self.sub_network_id,
+                        commitment,
+                    )
+                    .await?;
                 sub_nonce += 1;
             }
         }
 
         Ok(())
-    }
-
-    async fn submit_commitment(&self, commitment: UnboundedGenericCommitment) -> AnyResult<()> {
-        let message = sp_runtime::traits::Keccak256::hash_of(&(
-            self.evm_network_id,
-            self.sub_network_id,
-            commitment.hash(),
-        ));
-        if self.should_send_approval(message).await? {
-            info!("Sending approval");
-            let signature = self.signer.sign_prehashed(&message.0);
-            self.sub
-                .submit_unsigned_extrinsic(&runtime::tx().bridge_data_signer().approve(
-                    self.evm_network_id,
-                    message,
-                    signature,
-                ))
-                .await?;
-        }
-        if self.should_send_commitment(message).await? {
-            info!("Sending commitment");
-            let approvals = self.approvals(message).await?;
-            let proof = VerifierMultiProof::EVMMultisig(
-                runtime::runtime_types::multisig_verifier::MultiEVMProof {
-                    proof: approvals.try_into().unwrap(),
-                },
-            );
-            let success = self
-                .sub
-                .submit_concurrent_unsigned_extrinsic(
-                    &runtime::tx().bridge_inbound_channel().submit(
-                        self.evm_network_id,
-                        commitment,
-                        proof,
-                    ),
-                )
-                .await?;
-            if success {
-                info!("Commitment submitted by this relayer");
-            } else {
-                info!("Commitment will be submitted by another relayer");
-            }
-        }
-        Ok(())
-    }
-
-    async fn should_send_approval(&self, message: H256) -> AnyResult<bool> {
-        let peers = self.receiver_peers().await?;
-        let approvals = self.approvals(message).await?;
-        let is_already_approved = approvals
-            .iter()
-            .filter_map(|approval| approval.recover_prehashed(&message.0))
-            .any(|public| self.signer.public() == public);
-        Ok(
-            (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32)
-                && !is_already_approved,
-        )
-    }
-
-    async fn should_send_commitment(&self, message: H256) -> AnyResult<bool> {
-        let peers = self.receiver_peers().await?;
-        let approvals = self.approvals(message).await?;
-        Ok((approvals.len() as u32) >= bridge_types::utils::threshold(peers.len() as u32))
-    }
-
-    async fn approvals(&self, message: H256) -> AnyResult<Vec<ecdsa::Signature>> {
-        let peers = self.receiver_peers().await?;
-        let approvals = self
-            .sub
-            .storage_fetch_or_default(
-                &runtime::storage()
-                    .bridge_data_signer()
-                    .approvals(self.evm_network_id, message),
-                (),
-            )
-            .await?;
-        let mut acceptable_approvals = vec![];
-        for approval in approvals {
-            let public = approval
-                .1
-                .recover_prehashed(&message.0)
-                .ok_or(anyhow!("Wrong signature in data signer pallet"))?;
-            if peers.contains(&public) {
-                acceptable_approvals.push(approval.1);
-            }
-        }
-        Ok(acceptable_approvals)
-    }
-
-    async fn receiver_peers(&self) -> AnyResult<BTreeSet<ecdsa::Public>> {
-        let peers = self
-            .sub
-            .storage_fetch(
-                &runtime::storage()
-                    .multisig_verifier()
-                    .peer_keys(&self.evm_network_id),
-                (),
-            )
-            .await?
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
-        Ok(peers)
     }
 
     async fn handle_batch_dispatched(&mut self, current_eth_block: u64) -> AnyResult<()> {
@@ -342,7 +252,14 @@ impl SubstrateMessagesRelay {
                     }),
                 );
                 info!("Submitting status report: {:?}", commitment.nonce());
-                self.submit_commitment(commitment).await?;
+                self.sub
+                    .submit_inbound_commitment(
+                        self.signer.clone(),
+                        self.evm_network_id,
+                        self.sub_network_id,
+                        commitment,
+                    )
+                    .await?;
                 sub_reported_nonce += 1;
             }
         }
