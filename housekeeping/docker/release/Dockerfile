@@ -13,5 +13,3 @@ RUN apt-get update && \
 USER substrate
 
 COPY ./target/release/bridge-relayer /usr/local/bin/relayer
-
-COPY ./target/release/bridge-relayer /usr/local/bin/relayer
