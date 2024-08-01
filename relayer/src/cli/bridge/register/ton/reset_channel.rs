@@ -28,11 +28,8 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::cli::prelude::*;
-use toner::{
-    tlb::{bits::ser::BitWriterExt, ser::CellSerialize},
-    ton::MsgAddress,
-};
+use crate::{cli::prelude::*, ton::contracts::channel::Reset};
+use toner::ton::MsgAddress;
 
 #[derive(Args, Debug)]
 pub(crate) struct Command {
@@ -43,24 +40,10 @@ pub(crate) struct Command {
     channel: MsgAddress,
 }
 
-pub struct ResetChannelOp;
-
-const RESET_CHANNEL_OP: u32 = 1431274889;
-
-impl CellSerialize for ResetChannelOp {
-    fn store(
-        &self,
-        builder: &mut toner::tlb::ser::CellBuilder,
-    ) -> Result<(), toner::tlb::ser::CellBuilderError> {
-        builder.pack(RESET_CHANNEL_OP)?;
-        Ok(())
-    }
-}
-
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let ton = self.ton.get_signed_ton()?;
-        ton.submit(ResetChannelOp, self.channel, 200_000_000u64.into(), true)
+        ton.submit(Reset, self.channel, 200_000_000u64.into(), true)
             .await?;
         Ok(())
     }

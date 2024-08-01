@@ -10635,7 +10635,7 @@ dependencies = [
 [[package]]
 name = "xcm"
 version = "0.9.38"
-source = "git+https://github.com/paritytech/polkadot.git?branch=release-v0.9.38#097ffd245c42aeff28cf80f8a3568e1bee2e7da7"
+source = "git+https://github.com/paritytech/polkadot?branch=release-v0.9.38#097ffd245c42aeff28cf80f8a3568e1bee2e7da7"
 dependencies = [
  "derivative",
  "impl-trait-for-tuples",
@@ -10651,7 +10651,7 @@ dependencies = [
 [[package]]
 name = "xcm-procedural"
 version = "0.9.38"
-source = "git+https://github.com/paritytech/polkadot.git?branch=release-v0.9.38#097ffd245c42aeff28cf80f8a3568e1bee2e7da7"
+source = "git+https://github.com/paritytech/polkadot?branch=release-v0.9.38#097ffd245c42aeff28cf80f8a3568e1bee2e7da7"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -10805,14 +10805,14 @@ dependencies = [
 ]
 
 [[patch.unused]]
-name = "pallet-scheduler"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#b12c8d200054c92586ec33f5dfc5d0e109958004"
-
-[[patch.unused]]
 name = "orml-tokens"
 version = "0.4.1-dev"
 source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v0.9.38#241d5cdc98cca53b8cf990853943c9ae1193a70e"
+
+[[patch.unused]]
+name = "pallet-scheduler"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#b12c8d200054c92586ec33f5dfc5d0e109958004"
 
 [[patch.unused]]
 name = "pallet-scheduler"

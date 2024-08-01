@@ -41,14 +41,14 @@ pub(crate) enum Commands {
     Evm(evm::Commands),
     /// Transfer tokens from TON to another networks
     #[clap(subcommand)]
-    TON(ton::Commands),
+    Ton(ton::Commands),
 }
 
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
             Commands::Evm(cmd) => cmd.run().await,
-            Commands::TON(cmd) => cmd.run().await,
+            Commands::Ton(cmd) => cmd.run().await,
         }
     }
 }

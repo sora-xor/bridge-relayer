@@ -42,7 +42,6 @@ pub(crate) struct Command {
     apps: Apps,
 }
 
-
 #[derive(Subcommand, Debug)]
 pub(crate) enum Apps {
     /// Register JettonApp
@@ -107,7 +106,6 @@ impl Command {
                 asset_id,
                 precision,
                 network
-                
             } => runtime::runtime_types::framenode_runtime::RuntimeCall::JettonApp(
                 runtime::runtime_types::jetton_app::pallet::Call::register_network_with_existing_asset {
                     network_id: network.network(),
@@ -123,20 +121,11 @@ impl Command {
         Ok(())
     }
 
-    async fn check_if_registered(
-        &self,
-        sub: &SubSignedClient<MainnetConfig>,
-    ) -> AnyResult<bool> {
+    async fn check_if_registered(&self, sub: &SubSignedClient<MainnetConfig>) -> AnyResult<bool> {
         let (contract, registered) = match self.apps {
-            Apps::FungibleNew { contract, .. }
-            | Apps::FungibleExisting { contract, .. } => {
+            Apps::FungibleNew { contract, .. } | Apps::FungibleExisting { contract, .. } => {
                 let registered = sub
-                    .storage_fetch(
-                        &mainnet_runtime::storage()
-                            .jetton_app()
-                            .app_info(),
-                        (),
-                    )
+                    .storage_fetch(&mainnet_runtime::storage().jetton_app().app_info(), ())
                     .await?;
                 (contract, registered)
             }
@@ -148,9 +137,7 @@ impl Command {
             } else {
                 info!(
                     "App already registered with different contract address: ({:?}) {:?} != {:?}",
-                    registered_network_id,
-                    contract, 
-                    registered_contract
+                    registered_network_id, contract, registered_contract
                 );
             }
             Ok(true)

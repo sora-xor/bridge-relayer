@@ -262,6 +262,8 @@ pub struct TonClientCli {
     ton_key_file: Option<String>,
     #[clap(from_global)]
     ton_url: Option<Url>,
+    #[clap(from_global)]
+    ton_api_key: Option<String>,
 }
 
 impl TonClientCli {
@@ -279,7 +281,7 @@ impl TonClientCli {
     }
 
     pub fn get_unsigned_ton(&self) -> AnyResult<crate::ton::TonClient> {
-        let client = crate::ton::TonClient::new(self.get_url()?)?;
+        let client = crate::ton::TonClient::new(self.get_url()?, self.ton_api_key.clone())?;
         Ok(client)
     }
 

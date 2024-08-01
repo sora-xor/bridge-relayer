@@ -59,10 +59,16 @@ pub struct TonClient {
 }
 
 impl TonClient {
-    pub fn new(base: Url) -> AnyResult<Self> {
+    pub fn new(base: Url, api_key: Option<String>) -> AnyResult<Self> {
+        let mut headers = http::HeaderMap::new();
+        if let Some(api_key) = api_key {
+            headers.insert("X-API-Key", http::HeaderValue::from_str(&api_key)?);
+        }
         Ok(Self {
             base: base.join("api/v2/")?,
-            client: reqwest::Client::builder().build()?,
+            client: reqwest::Client::builder()
+                .default_headers(headers)
+                .build()?,
         })
     }
 
@@ -217,7 +223,7 @@ impl SignedTonClient {
             .run_get_method(self.wallet.address(), "seqno", vec![], None)
             .await?;
         if res.exit_code == 0 {
-            if let Some(StackEntry::Int(seqno)) = res.stack.get(0) {
+            if let Some(StackEntry::Int(seqno)) = res.stack.first() {
                 Ok(seqno.as_u32())
             } else {
                 Err(anyhow!("Got wrong nonce stack"))
