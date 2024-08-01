@@ -8,6 +8,7 @@ RUN apt-get update && \
     ca-certificates nano curl libc6 && \
     apt-get autoremove -y && \
     apt-get clean && \
+    useradd substrate -u 10000 && \
     find /var/lib/apt/lists/ -type f -not -name lock -delete
 
 USER substrate
