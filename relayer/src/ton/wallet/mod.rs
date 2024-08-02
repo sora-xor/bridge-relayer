@@ -38,6 +38,7 @@ impl TonWallet {
             "v4r2" | "V4R2" => Self::V4R2(Wallet::derive_default(key_pair)?),
             version => return Err(anyhow!("Wrong version {version}")),
         };
+        debug!("Initialized wallet: {}", wallet.address());
         Ok(wallet)
     }
 

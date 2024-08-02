@@ -98,6 +98,9 @@ pub struct Cli {
     /// TON HTTP API Url
     #[clap(long, global = true)]
     ton_url: Option<Url>,
+    /// TON HTTP API Key
+    #[clap(long, global = true)]
+    ton_api_key: Option<String>,
     /// Path for gas estimations
     #[clap(long, global = true)]
     gas_metrics_path: Option<PathBuf>,
