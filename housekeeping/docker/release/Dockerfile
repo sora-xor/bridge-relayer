@@ -1,4 +1,4 @@
-FROM debian:bullseye-20240513-slim
+FROM debian:bookworm-20240722-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -8,8 +8,8 @@ RUN apt-get update && \
     ca-certificates nano curl && \
     apt-get autoremove -y && \
     apt-get clean && \
-    find /var/lib/apt/lists/ -type f -not -name lock -delete &&\
-    useradd substrate -u 10000
+    useradd substrate -M -u 10000 && \
+    find /var/lib/apt/lists/ -type f -not -name lock -delete
 
 USER substrate
 
