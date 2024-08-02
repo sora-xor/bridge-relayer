@@ -77,7 +77,7 @@ impl TonClient {
         method: &str,
         body: &B,
     ) -> AnyResult<T> {
-        println!("Send {} => {}", method, serde_json::to_string(body)?);
+        trace!("Send {} => {}", method, serde_json::to_string(body)?);
         let res = self
             .client
             .post(self.base.join(method)?)
@@ -88,7 +88,7 @@ impl TonClient {
         let value: serde_json::Value = serde_json::from_slice(&bytes)?;
         let pretty = serde_json::to_string_pretty(&value)?;
         for (i, line) in pretty.lines().enumerate() {
-            println!("{i}: {line}");
+            trace!("{i}: {line}");
         }
         let body: TonApiResult<T> = serde_json::from_str(&pretty)?;
         if body.ok {
@@ -118,7 +118,7 @@ impl TonClient {
         let value: serde_json::Value = serde_json::from_slice(&bytes)?;
         let pretty = serde_json::to_string_pretty(&value)?;
         for (i, line) in pretty.lines().enumerate() {
-            println!("{i}: {line}");
+            trace!("{i}: {line}");
         }
         let body: TonApiResult<T> = serde_json::from_str(&pretty)?;
         if body.ok {
@@ -138,7 +138,7 @@ impl TonClient {
         &self,
         address: toner::ton::MsgAddress,
     ) -> AnyResult<FullAccountState> {
-        println!("Get address info {address:?}");
+        trace!("Get address info {address:?}");
         self.get_request(
             "getAddressInformation",
             &[("address".into(), address.to_string())],
@@ -154,7 +154,7 @@ impl TonClient {
         to_lt: Option<i64>,
         archival: Option<bool>,
     ) -> AnyResult<Vec<Transaction>> {
-        println!("Get transactions {address:?}, {limit:?}, {last_tx:?}, {to_lt:?}, {archival:?}");
+        trace!("Get transactions {address:?}, {limit:?}, {last_tx:?}, {to_lt:?}, {archival:?}");
         let mut query = vec![("address".to_string(), address.to_string())];
         if let Some(limit) = limit {
             query.push(("limit".to_string(), limit.to_string()));

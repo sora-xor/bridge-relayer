@@ -29,6 +29,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::{cli::prelude::*, ton::contracts::channel::Reset};
+use base64::Engine;
 use toner::ton::MsgAddress;
 
 #[derive(Args, Debug)]
@@ -43,8 +44,13 @@ pub(crate) struct Command {
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let ton = self.ton.get_signed_ton()?;
-        ton.submit(Reset, self.channel, 200_000_000u64.into(), true)
+        let tx_hash = ton
+            .submit(Reset, self.channel, 100_000_000u64.into(), true)
             .await?;
+        info!(
+            "Submitted Reset to channel: {}",
+            base64::engine::general_purpose::STANDARD.encode(&tx_hash)
+        );
         Ok(())
     }
 }
