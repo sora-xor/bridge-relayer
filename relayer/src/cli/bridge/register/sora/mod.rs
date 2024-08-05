@@ -32,6 +32,7 @@ mod evm;
 mod liberland;
 mod parachain;
 mod sora;
+mod ton;
 
 use crate::cli::prelude::*;
 use clap::*;
@@ -50,6 +51,9 @@ pub(crate) enum Commands {
     /// Register Liberland network in SORA network
     #[clap(subcommand)]
     Liberland(liberland::Commands),
+    /// Register TON contracts in SORA network
+    #[clap(subcommand)]
+    TON(ton::Commands),
 }
 
 impl Commands {
@@ -59,6 +63,7 @@ impl Commands {
             Commands::Parachain(cmd) => cmd.run().await,
             Commands::Sora(cmd) => cmd.run().await,
             Commands::Liberland(cmd) => cmd.run().await,
+            Commands::TON(cmd) => cmd.run().await,
         }
     }
 }

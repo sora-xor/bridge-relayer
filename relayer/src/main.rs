@@ -32,6 +32,7 @@ mod cli;
 mod ethereum;
 mod relay;
 mod substrate;
+mod ton;
 use clap::Parser;
 use prelude::*;
 

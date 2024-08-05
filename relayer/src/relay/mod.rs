@@ -38,3 +38,4 @@ pub mod messages_subscription;
 pub mod multisig_messages;
 pub mod parachain;
 pub mod parachain_messages;
+pub mod ton;

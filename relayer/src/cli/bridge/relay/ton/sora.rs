@@ -28,44 +28,55 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// TODO #167: fix clippy warnings
-#![allow(clippy::all)]
-mod evm;
-mod liberland;
-mod parachain;
-mod sora;
-mod ton;
+use toner::ton::MsgAddress;
 
 use crate::cli::prelude::*;
-use clap::*;
 
-#[derive(Debug, Subcommand)]
-pub(crate) enum Commands {
-    /// Relay commands from EVM to another networks
-    #[clap(subcommand)]
-    EVM(evm::Commands),
-    /// Relay commands from SORA to another networks
-    #[clap(subcommand)]
-    Sora(sora::Commands),
-    /// Relay commands from parachain to another networks
-    #[clap(subcommand)]
-    Parachain(parachain::Commands),
-    /// Relay commands from liberland to another networks
-    #[clap(subcommand)]
-    Liberland(liberland::Commands),
-    /// Relay commands from TON to another networks
-    #[clap(subcommand)]
-    TON(ton::Commands),
+#[derive(Args, Clone, Debug)]
+pub(crate) struct Command {
+    #[clap(flatten)]
+    sub: SubstrateClient,
+    #[clap(flatten)]
+    ton: TonClientCli,
+    /// Signer for bridge messages
+    #[clap(long)]
+    signer: String,
 }
 
-impl Commands {
-    pub async fn run(&self) -> AnyResult<()> {
-        match self {
-            Commands::EVM(cmd) => cmd.run().await,
-            Commands::Sora(cmd) => cmd.run().await,
-            Commands::Parachain(cmd) => cmd.run().await,
-            Commands::Liberland(cmd) => cmd.run().await,
-            Commands::TON(cmd) => cmd.run().await,
-        }
+impl Command {
+    pub(super) async fn run(&self) -> AnyResult<()> {
+        let ton = self.ton.get_unsigned_ton()?;
+        let sub = self.sub.get_unsigned_substrate().await?;
+        let signer = sp_core::ecdsa::Pair::from_string(&self.signer, None)?;
+        let Some((network_id, _app)) = sub
+            .storage_fetch(&runtime::storage().jetton_app().app_info(), ())
+            .await?
+        else {
+            return Err(anyhow!("Bridge app not registered"));
+        };
+        let Some(channel_address) = sub
+            .storage_fetch(
+                &runtime::storage()
+                    .bridge_inbound_channel()
+                    .ton_channel_addresses(network_id),
+                (),
+            )
+            .await?
+        else {
+            return Err(anyhow!("Bridge channel not registered"));
+        };
+        let relay = crate::relay::ton::ton_messages::RelayBuilder::new()
+            .with_sub_client(sub)
+            .with_ton_client(ton)
+            .with_channel(MsgAddress {
+                workchain_id: channel_address.workchain.into(),
+                address: channel_address.address.0,
+            })
+            .with_ton_network_id(network_id)
+            .with_signer(signer)
+            .build()
+            .await?;
+        relay.run().await?;
+        Ok(())
     }
 }
