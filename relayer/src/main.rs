@@ -29,10 +29,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod cli;
-mod ethereum;
 mod relay;
-mod substrate;
-mod ton;
 use clap::Parser;
 use prelude::*;
 
@@ -62,29 +59,30 @@ fn init_log() {
 }
 
 pub mod prelude {
-    pub use crate::ethereum::{
-        SignedClient as EthSignedClient, UnsignedClient as EthUnsignedClient,
-        UnsignedOrSignedClient as EthUnsignedOrSignedClient,
-    };
-    pub use crate::substrate::runtime::runtime_types as sub_types;
-    pub use crate::substrate::traits::{
-        ConfigExt, LiberlandConfig, MainnetConfig, ParachainConfig, ReceiverConfig, SenderConfig,
-    };
-    pub use crate::substrate::types::{liberland_runtime, mainnet_runtime, parachain_runtime};
-    pub use crate::substrate::{
-        event_to_string as sub_event_to_string, log_extrinsic_events as sub_log_extrinsic_events,
-        SignedClient as SubSignedClient, UnsignedClient as SubUnsignedClient,
-    };
     pub use anyhow::{Context, Result as AnyResult};
     pub use codec::{Decode, Encode};
     pub use either::Either;
+    pub use evm_client::alloy;
+    pub use evm_client::alloy::primitives as evm_primitives;
+    pub use evm_client::Client as EvmClient;
+    pub use evm_primitives::Address as EvmAddress;
     pub use hex_literal::hex;
     pub use http::Uri;
     pub use serde::{Deserialize, Serialize};
-    pub use sp_core::Pair as CryptoPair;
-    pub use sp_runtime::traits::Hash;
-    pub use sp_runtime::traits::Header as HeaderT;
-    pub use substrate_gen::runtime;
-    pub use substrate_gen::runtime::runtime_types::framenode_runtime::MultiProof as VerifierMultiProof;
+    pub use sub_client::abi::channel::GenericCommitment;
+    pub use sub_client::bridge_types;
+    pub use sub_client::{
+        abi::{
+            channel::{ChannelConstants, ChannelStorage, ChannelUnsignedTx},
+            multisig::{MultisigStorage, MultisigTx, MultisigUnsignedTx},
+        },
+        config::{liberland::LiberlandConfig, parachain::ParachainConfig, sora::SoraConfig},
+        error::Error as SubError,
+        sp_core,
+        sp_core::{ecdsa, sr25519, Pair as CryptoPair},
+        sp_runtime, Constants as SubConstants, SignedClient as SubSignedClient,
+        SignedTxs as SubSignedTxs, Storages as SubStorage, UnsignedClient as SubUnsignedClient,
+        UnsignedTxs as SubUnsignedTxs,
+    };
     pub use url::Url;
 }

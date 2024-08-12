@@ -30,10 +30,10 @@
 
 use bridge_types::ton::TonAddress;
 use sp_runtime::AccountId32;
+use sub_client::{abi::ton_app::TonAppStorage, bridge_types::MainnetAssetId};
 use toner::ton::MsgAddress;
 
 use crate::cli::prelude::*;
-use crate::substrate::AssetId;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
@@ -45,7 +45,7 @@ pub(crate) struct Command {
     #[clap(long)]
     account_id: AccountId32,
     #[clap(long)]
-    asset_id: AssetId,
+    asset_id: MainnetAssetId,
     #[clap(long)]
     amount: u128,
 }
@@ -54,38 +54,25 @@ impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let ton = self.ton.get_signed_ton()?;
         let sub = self.sub.get_unsigned_substrate().await?;
-        let Some((network_id, app)) = sub
-            .storage_fetch(&runtime::storage().jetton_app().app_info(), ())
-            .await?
-        else {
+        let Some((network_id, app)) = sub.storage().await?.app_info().await? else {
             return Err(anyhow!("Bridge app not registered"));
         };
         let Some(_channel_address) = sub
-            .storage_fetch(
-                &runtime::storage()
-                    .bridge_inbound_channel()
-                    .ton_channel_addresses(network_id),
-                (),
-            )
+            .storage()
+            .await?
+            .ton_channel_address(network_id.into())
             .await?
         else {
             return Err(anyhow!("Bridge channel not registered"));
         };
-        let Some(asset_address) = sub
-            .storage_fetch(
-                &runtime::storage()
-                    .jetton_app()
-                    .token_addresses(self.asset_id),
-                (),
-            )
-            .await?
+        let Some(asset_address) = sub.storage().await?.address_by_asset(self.asset_id).await?
         else {
             return Err(anyhow!("Asset not registered"));
         };
         assert!(asset_address == TonAddress::empty());
         let tx = ton
             .submit(
-                crate::ton::contracts::ton_app::SendTon {
+                ton_client::contracts::ton_app::SendTon {
                     receiver: self.account_id.clone(),
                     amount: self.amount.into(),
                 },

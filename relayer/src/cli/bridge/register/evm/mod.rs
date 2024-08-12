@@ -28,7 +28,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod initialize_channel;
 mod reset_channel;
 
 use crate::cli::prelude::*;
@@ -36,8 +35,6 @@ use clap::*;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
-    /// Initialize channel contract
-    InitializeChannels(initialize_channel::Command),
     /// Reset channel contract
     ResetChannels(reset_channel::Command),
 }
@@ -46,7 +43,6 @@ impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
             Commands::ResetChannels(cmd) => cmd.run().await,
-            Commands::InitializeChannels(cmd) => cmd.run().await,
         }
     }
 }

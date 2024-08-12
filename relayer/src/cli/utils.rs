@@ -31,10 +31,12 @@
 use std::path::PathBuf;
 
 use super::error::*;
-use crate::{prelude::*, substrate::traits::KeyPair};
-use bridge_types::ton::TonNetworkId;
+use crate::prelude::*;
 use clap::*;
-use sp_core::{crypto::Ss58Codec, H160};
+use evm_client::alloy::providers::Provider;
+use evm_client::alloy::signers::Signer;
+use sub_client::bridge_types::ton::TonNetworkId;
+use sub_client::sp_core::{crypto::Ss58Codec, H160};
 
 #[derive(Args, Debug, Clone)]
 pub struct SubstrateClient {
@@ -63,20 +65,18 @@ impl SubstrateClient {
             .ok_or(CliError::SubstrateEndpoint)?)
     }
 
-    pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<MainnetConfig>> {
-        let sub = SubUnsignedClient::new(self.get_url()?).await?;
+    pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<SoraConfig>> {
+        let sub = SubUnsignedClient::from_url(&self.get_url()?).await?;
         Ok(sub)
     }
 
-    pub async fn get_signed_substrate(&self) -> AnyResult<SubSignedClient<MainnetConfig>> {
-        let sub = self
-            .get_unsigned_substrate()
-            .await?
-            .signed(subxt::tx::PairSigner::new(
-                KeyPair::from_string(&self.get_key_string()?, None)
-                    .map_err(|e| anyhow!("Invalid key: {:?}", e))?,
-            ))
-            .await?;
+    pub async fn get_signed_substrate(
+        &self,
+    ) -> AnyResult<SubSignedClient<SoraConfig, sub_client::sp_core::sr25519::Pair>> {
+        let sub = self.get_unsigned_substrate().await?.signed(
+            sr25519::Pair::from_string(&self.get_key_string()?, None)
+                .map_err(|e| anyhow!("Invalid key: {:?}", e))?,
+        );
         Ok(sub)
     }
 }
@@ -109,25 +109,23 @@ impl ParachainClient {
     }
 
     pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<ParachainConfig>> {
-        let sub = SubUnsignedClient::new(self.get_url()?).await?;
+        let sub = SubUnsignedClient::from_url(&self.get_url()?).await?;
         Ok(sub)
     }
 
-    pub async fn get_signed_substrate(&self) -> AnyResult<SubSignedClient<ParachainConfig>> {
-        let sub = self
-            .get_unsigned_substrate()
-            .await?
-            .signed(subxt::tx::PairSigner::new(
-                KeyPair::from_string(&self.get_key_string()?, None)
-                    .map_err(|e| anyhow!("Invalid key: {:?}", e))?,
-            ))
-            .await?;
+    pub async fn get_signed_substrate(
+        &self,
+    ) -> AnyResult<SubSignedClient<ParachainConfig, sr25519::Pair>> {
+        let sub = self.get_unsigned_substrate().await?.signed(
+            sr25519::Pair::from_string(&self.get_key_string()?, None)
+                .map_err(|e| anyhow!("Invalid key: {:?}", e))?,
+        );
         Ok(sub)
     }
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct EvmClient {
+pub struct EvmClientCli {
     #[clap(from_global)]
     evm_key: Option<String>,
     #[clap(from_global)]
@@ -138,7 +136,7 @@ pub struct EvmClient {
     gas_metrics_path: Option<PathBuf>,
 }
 
-impl EvmClient {
+impl EvmClientCli {
     pub fn get_key_string(&self) -> AnyResult<String> {
         match (&self.evm_key, &self.evm_key_file) {
             (Some(_), Some(_)) => Err(CliError::BothKeyTypesProvided.into()),
@@ -152,28 +150,27 @@ impl EvmClient {
         Ok(self.evm_url.clone().ok_or(CliError::EvmEndpoint)?)
     }
 
-    pub async fn get_unsigned_evm(&self) -> AnyResult<EthUnsignedClient> {
-        let eth = EthUnsignedClient::new(self.get_url()?).await?;
-        Ok(eth)
+    pub async fn get_unsigned_evm(&self) -> AnyResult<EvmClient> {
+        Ok(EvmClient::from_url(&self.get_url()?.to_string()).await?)
     }
 
-    pub async fn get_signed_evm(&self) -> AnyResult<EthSignedClient> {
-        let eth = self
-            .get_unsigned_evm()
-            .await?
-            .sign_with_string(
-                self.get_key_string()?.as_str(),
-                self.gas_metrics_path.clone(),
-            )
-            .await?;
-        Ok(eth)
+    pub async fn get_signed_evm(&self) -> AnyResult<EvmClient> {
+        let client = self.get_unsigned_evm().await?;
+        let mut signer: alloy::signers::local::PrivateKeySigner = self.get_key_string()?.parse()?;
+        let chain_id = client.unsigned_provider().get_chain_id().await?;
+        signer.set_chain_id(Some(chain_id));
+        Ok(client.signed(alloy::network::EthereumWallet::new(signer))?)
     }
 
-    pub async fn get_evm(&self) -> AnyResult<either::Either<EthUnsignedClient, EthSignedClient>> {
-        if self.evm_key.is_none() && self.evm_key_file.is_none() {
-            Ok(Either::Left(self.get_unsigned_evm().await?))
+    pub async fn get_evm(&self) -> AnyResult<EvmClient> {
+        let client = self.get_unsigned_evm().await?;
+        if let Ok(key) = self.get_key_string() {
+            let mut signer: alloy::signers::local::PrivateKeySigner = key.parse()?;
+            let chain_id = client.unsigned_provider().get_chain_id().await?;
+            signer.set_chain_id(Some(chain_id));
+            Ok(client.signed(alloy::network::EthereumWallet::new(signer))?)
         } else {
-            Ok(Either::Right(self.get_signed_evm().await?))
+            Ok(client)
         }
     }
 }
@@ -206,19 +203,17 @@ impl LiberlandClient {
     }
 
     pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<LiberlandConfig>> {
-        let sub = SubUnsignedClient::new(self.get_url()?).await?;
+        let sub = SubUnsignedClient::from_url(&self.get_url()?).await?;
         Ok(sub)
     }
 
-    pub async fn get_signed_substrate(&self) -> AnyResult<SubSignedClient<LiberlandConfig>> {
-        let sub = self
-            .get_unsigned_substrate()
-            .await?
-            .signed(subxt::tx::PairSigner::new(
-                KeyPair::from_string(&self.get_key_string()?, None)
-                    .map_err(|e| anyhow!("Invalid key: {:?}", e))?,
-            ))
-            .await?;
+    pub async fn get_signed_substrate(
+        &self,
+    ) -> AnyResult<SubSignedClient<LiberlandConfig, sr25519::Pair>> {
+        let sub = self.get_unsigned_substrate().await?.signed(
+            sr25519::Pair::from_string(&self.get_key_string()?, None)
+                .map_err(|e| anyhow!("Invalid key: {:?}", e))?,
+        );
         Ok(sub)
     }
 }
@@ -231,24 +226,24 @@ pub struct BridgePeers {
 }
 
 impl BridgePeers {
-    pub fn ecdsa_keys(&self) -> AnyResult<Vec<sp_core::ecdsa::Public>> {
-        self.peers.iter().try_fold(
-            vec![],
-            |mut acc, peer| -> AnyResult<Vec<sp_core::ecdsa::Public>> {
-                let pk = sp_core::ecdsa::Public::from_string(peer)?;
+    pub fn ecdsa_keys(&self) -> AnyResult<Vec<ecdsa::Public>> {
+        self.peers
+            .iter()
+            .try_fold(vec![], |mut acc, peer| -> AnyResult<Vec<ecdsa::Public>> {
+                let pk = ecdsa::Public::from_string(peer)?;
                 acc.push(pk);
                 Ok(acc)
-            },
-        )
+            })
     }
 
     pub fn evm_addresses(&self) -> AnyResult<Vec<H160>> {
         self.ecdsa_keys()?
             .into_iter()
             .try_fold(vec![], |mut acc, peer| -> AnyResult<Vec<H160>> {
-                let pk = secp256k1::PublicKey::parse_compressed(&peer.0)?;
-                let address = common::eth::public_key_to_eth_address(&pk);
-                acc.push(address);
+                let address = evm_client::alloy::primitives::Address::from_public_key(
+                    &alloy::signers::k256::ecdsa::VerifyingKey::from_sec1_bytes(&peer.0)?,
+                );
+                acc.push(address.0 .0.into());
                 Ok(acc)
             })
     }
@@ -280,15 +275,15 @@ impl TonClientCli {
         Ok(self.ton_url.clone().ok_or(CliError::TonEndpoint)?)
     }
 
-    pub fn get_unsigned_ton(&self) -> AnyResult<crate::ton::TonClient> {
-        let client = crate::ton::TonClient::new(self.get_url()?, self.ton_api_key.clone())?;
+    pub fn get_unsigned_ton(&self) -> AnyResult<ton_client::TonClient> {
+        let client = ton_client::TonClient::new(self.get_url()?, self.ton_api_key.clone())?;
         Ok(client)
     }
 
-    pub fn get_signed_ton(&self) -> AnyResult<crate::ton::SignedTonClient> {
+    pub fn get_signed_ton(&self) -> AnyResult<ton_client::SignedTonClient> {
         let client = self.get_unsigned_ton()?;
-        let wallet = crate::ton::wallet::TonWallet::from_key(&self.get_key_string()?)?;
-        Ok(crate::ton::SignedTonClient::new(client, wallet))
+        let wallet = ton_client::wallet::TonWallet::from_key(&self.get_key_string()?)?;
+        Ok(ton_client::SignedTonClient::new(client, wallet))
     }
 }
 

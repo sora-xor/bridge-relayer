@@ -29,15 +29,14 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::cli::prelude::*;
-use bridge_types::H160;
 
 #[derive(Args, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
     /// EthApp contract address
     #[clap(long)]
-    channel_address: H160,
+    channel: EvmAddress,
     #[clap(flatten)]
     peers: BridgePeers,
 }
@@ -47,17 +46,9 @@ impl Command {
         let peers = self.peers.evm_addresses()?;
         info!("Peers: {:?}", peers);
         let eth = self.eth.get_signed_evm().await?;
-        let channel = ethereum_gen::ChannelHandler::new(self.channel_address, eth.inner());
-        let call = channel.reset(peers);
-        info!("Reset {:?}", call.tx.to());
-        let call = call.legacy().from(eth.address());
-        debug!("Static call: {:?}", call);
-        call.call().await?;
-        debug!("Send transaction");
-        let pending = call.send().await?;
-        debug!("Pending transaction: {:?}", pending);
-        let result = pending.await?;
-        debug!("Confirmed: {:?}", result);
+        let channel = eth.signed_channel(self.channel)?;
+        let tx_hash = channel.reset().send().await?.watch().await?;
+        debug!("Confirmed: {:?}", tx_hash);
         Ok(())
     }
 }

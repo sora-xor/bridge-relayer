@@ -28,8 +28,12 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::{cli::prelude::*, substrate::AssetId};
+use crate::cli::prelude::*;
 use bridge_types::ton::TonAddress;
+use sub_client::{
+    abi::ton_app::{TonAppStorage, TonAppTx},
+    bridge_types::MainnetAssetId,
+};
 use toner::ton::MsgAddress;
 
 use super::TonNetworkSelector;
@@ -54,10 +58,10 @@ pub(crate) enum Apps {
         contract: MsgAddress,
         /// Asset name
         #[clap(long)]
-        name: common::AssetName,
+        name: String,
         /// Asset symbol
         #[clap(long)]
-        symbol: common::AssetSymbol,
+        symbol: String,
         /// Precision
         #[clap(long)]
         precision: u8,
@@ -72,7 +76,7 @@ pub(crate) enum Apps {
         contract: MsgAddress,
         /// AssetId
         #[clap(long)]
-        asset_id: AssetId,
+        asset_id: MainnetAssetId,
         /// Asset precision
         #[clap(long)]
         precision: u8,
@@ -82,51 +86,49 @@ pub(crate) enum Apps {
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let sub = self.sub.get_signed_substrate().await?;
-        if self.check_if_registered(&sub).await? {
+        if self.check_if_registered(&sub.storage().await?).await? {
             return Ok(());
         }
-        let call = match &self.apps {
+        let tx = sub.tx().await?;
+        match &self.apps {
             Apps::FungibleNew {
                 contract,
                 name,
                 symbol,
                 precision,
-                network
-            } => runtime::runtime_types::framenode_runtime::RuntimeCall::JettonApp(
-                runtime::runtime_types::jetton_app::pallet::Call::register_network {
-                    network_id: network.network(),
-                    contract: TonAddress::new(contract.workchain_id as i8, contract.address.into()),
-                    name: name.clone(),
-                    symbol: symbol.clone(),
-                    decimals: *precision,
-                },
-            ),
+                network,
+            } => {
+                tx.register_network(
+                    network.network(),
+                    TonAddress::new(contract.workchain_id as i8, contract.address.into()),
+                    symbol.clone().into_bytes(),
+                    name.clone().into_bytes(),
+                    *precision,
+                )
+                .await?
+            }
             Apps::FungibleExisting {
                 contract,
                 asset_id,
                 precision,
-                network
-            } => runtime::runtime_types::framenode_runtime::RuntimeCall::JettonApp(
-                runtime::runtime_types::jetton_app::pallet::Call::register_network_with_existing_asset {
-                    network_id: network.network(),
-                    contract: TonAddress::new(contract.workchain_id as i8, contract.address.into()),
-                    asset_id: *asset_id,
-                    decimals: *precision,
-                },
-            ),
-        };
-        info!("Sudo call extrinsic: {:?}", call);
-        sub.submit_extrinsic(&runtime::tx().sudo().sudo(call))
-            .await?;
+                network,
+            } => {
+                tx.register_network_with_existing_asset(
+                    network.network(),
+                    TonAddress::new(contract.workchain_id as i8, contract.address.into()),
+                    *asset_id,
+                    *precision,
+                )
+                .await?
+            }
+        }
         Ok(())
     }
 
-    async fn check_if_registered(&self, sub: &SubSignedClient<MainnetConfig>) -> AnyResult<bool> {
+    async fn check_if_registered(&self, sub: &SubStorage<SoraConfig>) -> AnyResult<bool> {
         let (contract, registered) = match self.apps {
             Apps::FungibleNew { contract, .. } | Apps::FungibleExisting { contract, .. } => {
-                let registered = sub
-                    .storage_fetch(&mainnet_runtime::storage().jetton_app().app_info(), ())
-                    .await?;
+                let registered = sub.app_info().await?;
                 (contract, registered)
             }
         };

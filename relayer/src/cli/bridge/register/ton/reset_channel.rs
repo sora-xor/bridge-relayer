@@ -28,8 +28,9 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::{cli::prelude::*, ton::contracts::channel::Reset};
+use crate::cli::prelude::*;
 use base64::Engine;
+use ton_client::contracts::channel::Reset;
 use toner::ton::MsgAddress;
 
 #[derive(Args, Debug)]

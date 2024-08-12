@@ -28,6 +28,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use sub_client::abi::ton_app::TonAppStorage;
 use toner::ton::MsgAddress;
 
 use crate::cli::prelude::*;
@@ -48,24 +49,19 @@ impl Command {
         let ton = self.ton.get_unsigned_ton()?;
         let sub = self.sub.get_unsigned_substrate().await?;
         let signer = sp_core::ecdsa::Pair::from_string(&self.signer, None)?;
-        let Some((network_id, _app)) = sub
-            .storage_fetch(&runtime::storage().jetton_app().app_info(), ())
-            .await?
-        else {
+        let Some((network_id, _app)) = sub.storage().await?.app_info().await? else {
             return Err(anyhow!("Bridge app not registered"));
         };
+
         let Some(channel_address) = sub
-            .storage_fetch(
-                &runtime::storage()
-                    .bridge_inbound_channel()
-                    .ton_channel_addresses(network_id),
-                (),
-            )
+            .storage()
+            .await?
+            .ton_channel_address(network_id.into())
             .await?
         else {
             return Err(anyhow!("Bridge channel not registered"));
         };
-        let relay = crate::relay::ton::ton_messages::RelayBuilder::new()
+        let relay = crate::relay::ton::multisig::ton_sub::RelayBuilder::new()
             .with_sub_client(sub)
             .with_ton_client(ton)
             .with_channel(MsgAddress {

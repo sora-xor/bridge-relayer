@@ -29,6 +29,8 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::cli::prelude::*;
+use sub_client::abi::channel::ChannelConstants;
+use sub_client::abi::multisig::MultisigTx;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
@@ -47,34 +49,19 @@ impl Command {
 
         let peers = self.peers.ecdsa_keys()?;
 
-        let network_id = sub
-            .constant_fetch_or_default(
-                &mainnet_runtime::constants()
-                    .bridge_inbound_channel()
-                    .this_network_id(),
-            )
-            .context("Fetch this network id")?;
+        let network_id = sub.constants().network_id().await?;
 
-        let call = liberland_runtime::runtime_types::kitchensink_runtime::RuntimeCall::BridgeDataSigner(
-            liberland_runtime::runtime_types::bridge_data_signer::pallet::Call::register_network {
-                network_id,
-                peers: peers.clone(),
-            },
-        );
-        info!("Submit sudo call: {call:?}");
-        let call = liberland_runtime::tx().sudo().sudo(call);
-        liber.submit_extrinsic(&call).await?;
+        liber
+            .tx()
+            .await?
+            .register_signer(network_id, peers.clone())
+            .await?;
 
-        let call =
-            liberland_runtime::runtime_types::kitchensink_runtime::RuntimeCall::MultisigVerifier(
-                liberland_runtime::runtime_types::multisig_verifier::pallet::Call::initialize {
-                    network_id,
-                    peers,
-                },
-            );
-        info!("Submit sudo call: {call:?}");
-        let call = liberland_runtime::tx().sudo().sudo(call);
-        liber.submit_extrinsic(&call).await?;
+        liber
+            .tx()
+            .await?
+            .register_verifier(network_id, peers)
+            .await?;
 
         Ok(())
     }

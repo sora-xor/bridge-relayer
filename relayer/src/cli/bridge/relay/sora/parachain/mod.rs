@@ -28,7 +28,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-mod beefy;
 mod trusted;
 
 use crate::cli::prelude::*;
@@ -36,8 +35,6 @@ use clap::*;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
-    /// SORA to parachain relay with BEEFY proofs
-    BEEFY(beefy::Command),
     /// SORA to parachain relay with trusted peers
     Trusted(trusted::Command),
 }
@@ -45,7 +42,6 @@ pub(crate) enum Commands {
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
-            Commands::BEEFY(cmd) => cmd.run().await,
             Commands::Trusted(cmd) => cmd.run().await,
         }
     }

@@ -30,13 +30,14 @@
 
 use crate::cli::prelude::*;
 use bridge_types::H160;
+use sub_client::{abi::channel::ChannelSignedTx, bridge_types::EVMChainId};
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
     /// InboundChannel contract address
     #[clap(long)]
     channel_address: H160,
@@ -49,51 +50,22 @@ impl Command {
         let eth = self.eth.get_unsigned_evm().await?;
         let sub = self.sub.get_signed_substrate().await?;
 
-        let network_id = eth.chainid().await?;
+        let network_id: EVMChainId = eth.chain_id().await?.0.into();
 
         let peers = self.peers.ecdsa_keys()?;
 
         let is_channel_registered = sub
-            .storage_fetch(
-                &mainnet_runtime::storage()
-                    .bridge_inbound_channel()
-                    .evm_channel_addresses(&network_id),
-                (),
-            )
+            .storage()
+            .await?
+            .evm_channel_address(network_id.into())
             .await?
             .is_some();
         if !is_channel_registered {
-            let call = runtime::runtime_types::framenode_runtime::RuntimeCall::BridgeInboundChannel(
-                runtime::runtime_types::bridge_channel::inbound::pallet::Call::register_evm_channel {
-                    network_id,
-                    channel_address: self.channel_address,
-                },
-            );
-            info!("Sudo call extrinsic: {:?}", call);
-            sub.submit_extrinsic(&runtime::tx().sudo().sudo(call))
+            let tx = sub.tx().await?;
+            tx.register_evm_channel(network_id.into(), self.channel_address)
                 .await?;
-
-            let network_id = bridge_types::GenericNetworkId::EVM(network_id);
-            let call = mainnet_runtime::runtime_types::framenode_runtime::RuntimeCall::BridgeDataSigner(
-            mainnet_runtime::runtime_types::bridge_data_signer::pallet::Call::register_network {
-                network_id,
-                peers: peers.clone(),
-            },
-        );
-            info!("Submit sudo call: {call:?}");
-            let call = mainnet_runtime::tx().sudo().sudo(call);
-            sub.submit_extrinsic(&call).await?;
-
-            let call =
-                mainnet_runtime::runtime_types::framenode_runtime::RuntimeCall::MultisigVerifier(
-                    mainnet_runtime::runtime_types::multisig_verifier::pallet::Call::initialize {
-                        network_id,
-                        peers,
-                    },
-                );
-            info!("Submit sudo call: {call:?}");
-            let call = mainnet_runtime::tx().sudo().sudo(call);
-            sub.submit_extrinsic(&call).await?;
+            tx.register_signer(network_id.into(), peers.clone()).await?;
+            tx.register_verifier(network_id.into(), peers).await?;
         } else {
             info!("Channel already registered");
         }

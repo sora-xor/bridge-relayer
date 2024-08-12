@@ -35,6 +35,7 @@ use clap::*;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
+    /// Register SORA to Liberland bridge with trusted peers
     Trusted(trusted::Command),
 }
 

@@ -29,11 +29,8 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod bridge;
-mod copy_liquidity;
 mod error;
 mod mint_test_token;
-mod old_bridge;
-mod subscribe_beefy;
 pub mod utils;
 
 use std::path::PathBuf;
@@ -52,7 +49,9 @@ pub struct Cli {
     #[clap(flatten)]
     para: ParachainClient,
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
+    #[clap(flatten)]
+    ton: TonClientCli,
     /// Substrate account derive URI
     #[clap(long, global = true)]
     substrate_key: Option<String>,
@@ -116,27 +115,18 @@ impl Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Subscribe beefy to new commitments
-    SubscribeBeefy(subscribe_beefy::Command),
     /// Mint test token (work for tokens with mint method)
     MintTestToken(mint_test_token::Command),
     /// Operations with bridge
     #[clap(subcommand)]
     Bridge(bridge::Commands),
-    /// Operations with old bridge
-    #[clap(subcommand)]
-    OldBridge(old_bridge::Commands),
-    CopyLiquidity(copy_liquidity::Command),
 }
 
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
-            Self::SubscribeBeefy(cmd) => cmd.run().await,
             Self::MintTestToken(cmd) => cmd.run().await,
             Self::Bridge(cmd) => cmd.run().await,
-            Self::OldBridge(cmd) => cmd.run().await,
-            Self::CopyLiquidity(cmd) => cmd.run().await,
         }
     }
 }
@@ -145,5 +135,4 @@ pub mod prelude {
     pub use crate::cli::utils::*;
     pub use crate::prelude::*;
     pub use clap::*;
-    pub use ethers::providers::Middleware;
 }
