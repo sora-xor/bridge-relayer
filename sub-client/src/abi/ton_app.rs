@@ -62,18 +62,20 @@ pub struct RegisterNetworkWithExistingAsset {
     decimals: u8,
 }
 
-const PALLET: PalletInfo = PalletInfo::new("JettonApp");
+pub const PALLET: PalletInfo = PalletInfo::new("JettonApp");
 
-const REGISTER_NETWORK_CALL: SignedTx<RegisterNetwork> = SignedTx::new(PALLET, "register_network");
-const REGISTER_NETWORK_WITH_EXISTING_ASSET_CALL: SignedTx<RegisterNetworkWithExistingAsset> =
+pub const REGISTER_NETWORK_CALL: SignedTx<RegisterNetwork> =
+    SignedTx::new(PALLET, "register_network");
+pub const REGISTER_NETWORK_WITH_EXISTING_ASSET_CALL: SignedTx<RegisterNetworkWithExistingAsset> =
     SignedTx::new(PALLET, "register_network_with_existing_asset");
 
-const APP_INFO: StorageEntry<(TonNetworkId, TonAddress), ()> = StorageEntry::new(PALLET, "AppInfo");
-const ASSET_KINDS: StorageMap<MainnetAssetId, AssetKind, ()> =
+pub const APP_INFO: StorageEntry<(TonNetworkId, TonAddress), ()> =
+    StorageEntry::new(PALLET, "AppInfo");
+pub const ASSET_KINDS: StorageMap<MainnetAssetId, AssetKind, ()> =
     StorageMap::new(PALLET, "AssetKinds");
-const ASSETS_BY_ADDRESSES: StorageMap<TonAddress, MainnetAssetId, ()> =
+pub const ASSETS_BY_ADDRESSES: StorageMap<TonAddress, MainnetAssetId, ()> =
     StorageMap::new(PALLET, "AssetsByAddresses");
-const TOKEN_ADDRESSES: StorageMap<MainnetAssetId, TonAddress, ()> =
+pub const TOKEN_ADDRESSES: StorageMap<MainnetAssetId, TonAddress, ()> =
     StorageMap::new(PALLET, "TokenAddresses");
 
 #[async_trait::async_trait]
@@ -126,11 +128,11 @@ impl<T: subxt::Config> TonAppStorage<T> for crate::Storages<T> {
 #[async_trait::async_trait]
 impl<T, P> TonAppTx<T> for crate::tx::SignedTxs<T, P>
 where
-    T: subxt::Config,
+    T: subxt::Config<ExtrinsicParams = subxt::config::DefaultExtrinsicParams<T>>,
     P: sp_core::Pair + Send + Sync + Clone,
-    <T::ExtrinsicParams as subxt::config::ExtrinsicParams<T>>::Params: Default + Send + Sync,
     T::Signature: From<P::Signature> + Send + Sync,
     T::AccountId: From<sp_runtime::AccountId32> + Send + Sync,
+    T::AssetId: Send + Sync,
 {
     async fn register_network(
         &self,

@@ -70,7 +70,7 @@ pub struct RegisterNetwork {
     contract: H160,
     symbol: Vec<u8>,
     name: Vec<u8>,
-    decimals: u8,
+    sidechain_precision: u8,
 }
 
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq, EncodeAsType, DecodeAsType)]
@@ -78,27 +78,28 @@ pub struct RegisterNetworkWithExistingAsset {
     network_id: EVMChainId,
     contract: H160,
     asset_id: MainnetAssetId,
-    decimals: u8,
+    sidechain_precision: u8,
 }
 
-const PALLET: PalletInfo = PalletInfo::new("EVMFungibleApp");
+pub const PALLET: PalletInfo = PalletInfo::new("EVMFungibleApp");
 
-const REGISTER_EXISTING_ASSET_CALL: SignedTx<RegisterExistingAsset> =
+pub const REGISTER_EXISTING_ASSET_CALL: SignedTx<RegisterExistingAsset> =
     SignedTx::new(PALLET, "register_existing_sidechain_asset");
-const REGISTER_ASSET_CALL: SignedTx<RegisterAsset> =
+pub const REGISTER_ASSET_CALL: SignedTx<RegisterAsset> =
     SignedTx::new(PALLET, "register_sidechain_asset");
-const REGISTER_SORA_ASSET_CALL: SignedTx<RegisterSoraAsset> =
+pub const REGISTER_SORA_ASSET_CALL: SignedTx<RegisterSoraAsset> =
     SignedTx::new(PALLET, "register_thischain_asset");
-const REGISTER_NETWORK_CALL: SignedTx<RegisterNetwork> = SignedTx::new(PALLET, "register_network");
-const REGISTER_NETWORK_WITH_EXISTING_ASSET_CALL: SignedTx<RegisterNetworkWithExistingAsset> =
+pub const REGISTER_NETWORK_CALL: SignedTx<RegisterNetwork> =
+    SignedTx::new(PALLET, "register_network");
+pub const REGISTER_NETWORK_WITH_EXISTING_ASSET_CALL: SignedTx<RegisterNetworkWithExistingAsset> =
     SignedTx::new(PALLET, "register_network_with_existing_asset");
 
-const APP_ADDRESSES: StorageMap<EVMChainId, H160, ()> = StorageMap::new(PALLET, "AppAddresses");
-const ASSET_KINDS: StorageDoubleMap<EVMChainId, MainnetAssetId, AssetKind, ()> =
+pub const APP_ADDRESSES: StorageMap<EVMChainId, H160, ()> = StorageMap::new(PALLET, "AppAddresses");
+pub const ASSET_KINDS: StorageDoubleMap<EVMChainId, MainnetAssetId, AssetKind, ()> =
     StorageDoubleMap::new(PALLET, "AssetKinds");
-const ASSETS_BY_ADDRESSES: StorageDoubleMap<EVMChainId, H160, MainnetAssetId, ()> =
+pub const ASSETS_BY_ADDRESSES: StorageDoubleMap<EVMChainId, H160, MainnetAssetId, ()> =
     StorageDoubleMap::new(PALLET, "AssetsByAddresses");
-const TOKEN_ADDRESSES: StorageDoubleMap<EVMChainId, MainnetAssetId, H160, ()> =
+pub const TOKEN_ADDRESSES: StorageDoubleMap<EVMChainId, MainnetAssetId, H160, ()> =
     StorageDoubleMap::new(PALLET, "TokenAddresses");
 
 #[async_trait::async_trait]
@@ -198,11 +199,11 @@ impl<T: subxt::Config> EvmAppStorage<T> for crate::Storages<T> {
 #[async_trait::async_trait]
 impl<T, P> EvmAppTx<T> for crate::tx::SignedTxs<T, P>
 where
-    T: subxt::Config,
+    T: subxt::Config<ExtrinsicParams = subxt::config::DefaultExtrinsicParams<T>>,
     P: sp_core::Pair + Send + Sync + Clone,
-    <T::ExtrinsicParams as subxt::config::ExtrinsicParams<T>>::Params: Default + Send + Sync,
     T::Signature: From<P::Signature> + Send + Sync,
     T::AccountId: From<sp_runtime::AccountId32> + Send + Sync,
+    T::AssetId: Send + Sync,
 {
     async fn register_existing_asset(
         &self,
@@ -278,7 +279,7 @@ where
                     contract,
                     symbol,
                     name,
-                    decimals,
+                    sidechain_precision: decimals,
                 },
             )
             .await
@@ -298,7 +299,7 @@ where
                     network_id,
                     contract,
                     asset_id,
-                    decimals,
+                    sidechain_precision: decimals,
                 },
             )
             .await

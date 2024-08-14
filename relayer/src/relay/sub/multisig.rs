@@ -39,6 +39,7 @@ use sp_core::ecdsa;
 use sp_runtime::traits::Keccak256;
 use sub_client::abi::channel::ChannelStorage;
 use sub_client::sp_runtime::traits::Hash;
+use sub_client::types::BlockNumberOrHash;
 
 pub struct RelayBuilder<S: subxt::Config, R: subxt::Config> {
     sender: Option<SubUnsignedClient<S>>,
@@ -131,6 +132,8 @@ where
     async fn inbound_channel_nonce(&self) -> AnyResult<u64> {
         let nonce = self
             .receiver
+            .at(BlockNumberOrHash::Best)
+            .await?
             .storage()
             .await?
             .inbound_nonce(self.sender_network_id.into())
@@ -195,6 +198,7 @@ where
         Ok(peers)
     }
 
+    #[instrument(skip(self), name = "sub_multisig")]
     pub async fn run(self) -> AnyResult<()> {
         loop {
             let public = self.signer.public();

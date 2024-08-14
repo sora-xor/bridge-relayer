@@ -28,50 +28,39 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-contract Channel {
-    uint112 public messageNonce;
-    uint112 public batchNonce;
-    uint32 public peersCount;
+use codec::{Decode, Encode};
+use scale_decode::DecodeAsType;
+use scale_encode::EncodeAsType;
 
-    #[derive(Debug)]
-    struct Message {
-        address target;
-        uint256 max_gas;
-        bytes payload;
+use crate::{tx::SignedTx, types::PalletInfo, SubResult};
+
+#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq, EncodeAsType, DecodeAsType)]
+pub struct KillPrefix {
+    prefix: Vec<u8>,
+    subkeys: u32,
+}
+
+const PALLET: PalletInfo = PalletInfo::new("System");
+
+const KILL_PREFIX_CALL: SignedTx<KillPrefix> = SignedTx::new(PALLET, "kill_prefix");
+
+#[async_trait::async_trait]
+pub trait SystemTx<T: subxt::Config> {
+    async fn kill_prefix(&self, prefix: Vec<u8>, subkeys: u32) -> SubResult<()>;
+}
+
+#[async_trait::async_trait]
+impl<T, P> SystemTx<T> for crate::tx::SignedTxs<T, P>
+where
+    T: subxt::Config<ExtrinsicParams = subxt::config::DefaultExtrinsicParams<T>>,
+    P: sp_core::Pair + Send + Sync + Clone,
+    T::Signature: From<P::Signature> + Send + Sync,
+    T::AccountId: From<sp_runtime::AccountId32> + Send + Sync,
+    T::AssetId: Send + Sync,
+{
+    async fn kill_prefix(&self, prefix: Vec<u8>, subkeys: u32) -> SubResult<()> {
+        KILL_PREFIX_CALL
+            .submit_sudo(self, KillPrefix { prefix, subkeys })
+            .await
     }
-
-    #[derive(Debug)]
-    struct Batch {
-        uint256 nonce;
-        uint256 total_max_gas;
-        Message[] messages;
-    }
-
-    #[derive(Debug)]
-    event MessageDispatched(address source, uint256 nonce, bytes payload);
-
-    #[derive(Debug)]
-    event BatchDispatched(
-        uint256 batch_nonce,
-        address relayer,
-        uint256 results,
-        uint256 results_length,
-        uint256 gas_spent,
-        uint256 base_fee
-    );
-
-    #[derive(Debug)]
-    event ChangePeers(address peerId, bool removal);
-    
-    #[derive(Debug)]
-    event Reseted(uint256 peers);
-
-    function submit(
-        Batch calldata batch,
-        uint8[] calldata v,
-        bytes32[] calldata r,
-        bytes32[] calldata s
-    ) external virtual;
-
-    function reset(address[] calldata initialPeers) external;
 }

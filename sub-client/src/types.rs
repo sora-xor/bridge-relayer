@@ -85,4 +85,8 @@ impl PalletInfo {
     pub const fn new(name: &'static str) -> Self {
         Self { name }
     }
+
+    pub fn prefix(&self) -> [u8; 16] {
+        sp_core::twox_128(self.name.as_bytes())
+    }
 }

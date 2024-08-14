@@ -30,7 +30,6 @@
 
 use crate::error::{Error, TonResult};
 use chrono::{DateTime, Utc};
-use log::debug;
 use toner::contracts::wallet::mnemonic::Mnemonic;
 use toner::contracts::wallet::v4r2::V4R2;
 use toner::contracts::wallet::{Wallet, WalletOpSendMessage};

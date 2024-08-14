@@ -34,7 +34,6 @@ use bridge_types::EVMChainId;
 use bridge_types::GenericNetworkId;
 use bridge_types::SubNetworkId;
 use codec::{Decode, Encode};
-use log::info;
 use scale_decode::DecodeAsType;
 use scale_encode::EncodeAsType;
 use scale_info::TypeInfo;
@@ -120,11 +119,11 @@ pub const SUB_INBOUND_SUBMIT_PARACHAIN: UnsignedTx<
 
 pub const INBOUND_REGISTER_EVM: SignedTx<
     GenericRegister<StaticType<EVMChainId>, StaticType<H160>>,
-> = SignedTx::new(SUB_INBOUND_PALLET, "register_evm_channel");
+> = SignedTx::new(INBOUND_PALLET, "register_evm_channel");
 
 pub const INBOUND_REGISTER_TON: SignedTx<
     GenericRegister<StaticType<TonNetworkId>, StaticType<TonAddress>>,
-> = SignedTx::new(SUB_INBOUND_PALLET, "register_ton_channel");
+> = SignedTx::new(INBOUND_PALLET, "register_ton_channel");
 
 pub type MaxU32 = sp_core::ConstU32<{ std::u32::MAX }>;
 pub type GenericCommitment = bridge_types::GenericCommitment<MaxU32, MaxU32>;
@@ -185,7 +184,7 @@ pub struct SubstrateSubmit<Proof> {
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq, EncodeAsType, DecodeAsType)]
 pub struct GenericRegister<Network, Channel> {
     pub network_id: Network,
-    pub channel: Channel,
+    pub channel_address: Channel,
 }
 
 #[async_trait::async_trait]
@@ -339,7 +338,7 @@ where
                         self,
                         GenericRegister {
                             network_id: StaticType(network_id),
-                            channel: StaticType(channel),
+                            channel_address: StaticType(channel),
                         },
                     )
                     .await
@@ -360,7 +359,7 @@ where
                         self,
                         GenericRegister {
                             network_id: StaticType(network_id),
-                            channel: StaticType(channel),
+                            channel_address: StaticType(channel),
                         },
                     )
                     .await
@@ -486,6 +485,7 @@ where
     T: subxt::Config,
     crate::Storages<T>: ChannelStorage<T>,
 {
+    #[instrument(skip(self), err(level = "warn"))]
     pub async fn commitment_with_nonce(
         &self,
         network_id: GenericNetworkId,
@@ -548,6 +548,7 @@ where
         Ok(())
     }
 
+    #[instrument(skip(self, signer), err(level = "warn"), fields(signer = signer.public().to_string()))]
     pub async fn approve_message(
         &self,
         signer: sp_core::ecdsa::Pair,
@@ -564,6 +565,8 @@ where
                 .await?
                 .approve(sender, message, signature)
                 .await?;
+        } else {
+            info!("Already approved");
         }
         Ok(())
     }

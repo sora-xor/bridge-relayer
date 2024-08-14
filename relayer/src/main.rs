@@ -34,7 +34,7 @@ use clap::Parser;
 use prelude::*;
 
 #[macro_use]
-extern crate log;
+extern crate tracing;
 
 #[macro_use]
 extern crate anyhow;
@@ -51,11 +51,16 @@ async fn main() -> AnyResult<()> {
 }
 
 fn init_log() {
-    if std::env::var_os("RUST_LOG").is_none() {
-        env_logger::builder().parse_filters("info").init();
-    } else {
-        env_logger::init();
-    }
+    use tracing::Level;
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(
+            EnvFilter::builder()
+                .with_default_directive(Level::INFO.into())
+                .from_env_lossy(),
+        )
+        .init();
 }
 
 pub mod prelude {

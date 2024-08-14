@@ -28,50 +28,42 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-contract Channel {
-    uint112 public messageNonce;
-    uint112 public batchNonce;
-    uint32 public peersCount;
+use sub_client::{abi::system::SystemTx, types::PalletInfo};
 
-    #[derive(Debug)]
-    struct Message {
-        address target;
-        uint256 max_gas;
-        bytes payload;
+use crate::cli::prelude::*;
+
+#[derive(Args, Clone, Debug)]
+pub(crate) struct Command {
+    #[clap(flatten)]
+    sub: SubstrateClient,
+}
+
+impl Command {
+    pub(super) async fn run(&self) -> AnyResult<()> {
+        let sub = self.sub.get_signed_substrate().await?;
+
+        let tx = sub.tx().await?;
+        let mut set = tokio::task::JoinSet::new();
+        for pallet in [
+            PalletInfo::new("SubstrateBridgeApp"),
+            PalletInfo::new("ParachainBridgeApp"),
+            sub_client::abi::evm_app::PALLET,
+            sub_client::abi::ton_app::PALLET,
+            sub_client::abi::channel::SUB_INBOUND_PALLET,
+            sub_client::abi::channel::SUB_OUTBOUND_PALLET,
+            sub_client::abi::channel::INBOUND_PALLET,
+            sub_client::abi::channel::OUTBOUND_PALLET,
+            sub_client::abi::multisig::VERIFIER_PALLET,
+            sub_client::abi::multisig::SIGNER_PALLET,
+        ] {
+            let tx = tx.clone();
+            set.spawn(async move { tx.kill_prefix(pallet.prefix().to_vec(), 1000).await });
+        }
+
+        while let Some(res) = set.join_next().await {
+            res??;
+        }
+
+        Ok(())
     }
-
-    #[derive(Debug)]
-    struct Batch {
-        uint256 nonce;
-        uint256 total_max_gas;
-        Message[] messages;
-    }
-
-    #[derive(Debug)]
-    event MessageDispatched(address source, uint256 nonce, bytes payload);
-
-    #[derive(Debug)]
-    event BatchDispatched(
-        uint256 batch_nonce,
-        address relayer,
-        uint256 results,
-        uint256 results_length,
-        uint256 gas_spent,
-        uint256 base_fee
-    );
-
-    #[derive(Debug)]
-    event ChangePeers(address peerId, bool removal);
-    
-    #[derive(Debug)]
-    event Reseted(uint256 peers);
-
-    function submit(
-        Batch calldata batch,
-        uint8[] calldata v,
-        bytes32[] calldata r,
-        bytes32[] calldata s
-    ) external virtual;
-
-    function reset(address[] calldata initialPeers) external;
 }

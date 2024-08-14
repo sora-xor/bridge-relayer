@@ -28,13 +28,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#[macro_use]
+extern crate tracing;
+
 pub mod contracts;
 pub mod error;
 pub mod types;
 pub mod wallet;
 
 use error::{Error, TonResult};
-use log::trace;
 use num_bigint::BigUint;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -51,6 +53,7 @@ use toner::{
         MsgAddress,
     },
 };
+use tracing::trace;
 use types::*;
 use url::Url;
 use wallet::*;

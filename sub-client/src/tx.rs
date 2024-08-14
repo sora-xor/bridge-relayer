@@ -38,6 +38,7 @@ use crate::{
     Error, SubResult,
 };
 
+#[derive_where::derive_where(Clone; P)]
 pub struct SignedTxs<T: subxt::Config, P: Send + Sync + 'static> {
     client: crate::SignedClient<T, P>,
     txs: subxt::tx::TxClient<T, subxt::OnlineClient<T>>,
@@ -73,16 +74,22 @@ where
     }
 }
 
-#[derive_where::derive_where(Clone, Copy, Debug)]
+#[derive_where::derive_where(Clone, Copy)]
 pub struct SignedTx<CallData> {
     pallet: PalletInfo,
     call: &'static str,
     _phantom: PhantomData<CallData>,
 }
 
+impl<CallData: std::fmt::Debug> std::fmt::Debug for SignedTx<CallData> {
+    fn fmt(&self, f: &mut scale_info::prelude::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SignedTx({}::{})", self.pallet.name, self.call)
+    }
+}
+
 impl<CallData> SignedTx<CallData>
 where
-    CallData: EncodeAsFields,
+    CallData: EncodeAsFields + std::fmt::Debug,
 {
     pub const fn new(pallet: PalletInfo, call: &'static str) -> Self {
         Self {
@@ -105,18 +112,28 @@ where
         txs.is_supported(self.pallet.name, self.call)
     }
 
+    #[instrument(skip(txs, call_data), err(level = "warn"), fields(nonce))]
     pub async fn submit<T, P>(&self, txs: &SignedTxs<T, P>, call_data: CallData) -> SubResult<()>
     where
-        T: subxt::Config,
+        T: subxt::Config<ExtrinsicParams = subxt::config::DefaultExtrinsicParams<T>>,
         P: sp_core::Pair + Clone + Send + Sync + 'static,
-        <T::ExtrinsicParams as subxt::config::ExtrinsicParams<T>>::Params: Default,
         T::Signature: From<P::Signature>,
         T::AccountId: From<sp_runtime::AccountId32>,
+        T::AssetId: Send + Sync,
     {
+        debug!("Call data: {call_data:?}");
         if self.is_supported(txs) {
+            let nonce = txs.client().nonce().await?;
+            tracing::Span::current().record("nonce", &nonce);
             let progress = txs
                 .txs
-                .sign_and_submit_then_watch_default(&self.payload(call_data), txs.client().signer())
+                .sign_and_submit_then_watch(
+                    &self.payload(call_data),
+                    txs.client().signer(),
+                    subxt::config::DefaultExtrinsicParamsBuilder::new()
+                        .nonce(nonce)
+                        .build(),
+                )
                 .await?;
             txs.client().wait_for_success(progress).await
         } else {
@@ -124,25 +141,32 @@ where
         }
     }
 
+    #[instrument(skip(txs, call_data), err(level = "warn"), fields(nonce))]
     pub async fn submit_sudo<T, P>(
         &self,
         txs: &SignedTxs<T, P>,
         call_data: CallData,
     ) -> SubResult<()>
     where
-        T: subxt::Config,
+        T: subxt::Config<ExtrinsicParams = subxt::config::DefaultExtrinsicParams<T>>,
         P: sp_core::Pair + Clone + Send + Sync + 'static,
-        <T::ExtrinsicParams as subxt::config::ExtrinsicParams<T>>::Params: Default,
         T::Signature: From<P::Signature>,
         T::AccountId: From<sp_runtime::AccountId32>,
+        T::AssetId: Send + Sync,
     {
+        debug!("Call data: {call_data:?}");
         if self.is_supported(txs) || txs.is_supported(SudoCall::<()>::PALLET, SudoCall::<()>::CALL)
         {
+            let nonce = txs.client().nonce().await?;
+            tracing::Span::current().record("nonce", &nonce);
             let progress = txs
                 .txs
-                .sign_and_submit_then_watch_default(
+                .sign_and_submit_then_watch(
                     &SudoCall(self.payload(call_data)),
                     txs.client().signer(),
+                    subxt::config::DefaultExtrinsicParamsBuilder::new()
+                        .nonce(nonce)
+                        .build(),
                 )
                 .await?;
             txs.client().wait_for_success(progress).await

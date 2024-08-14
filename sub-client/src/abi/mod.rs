@@ -33,4 +33,5 @@ pub mod evm_app;
 pub mod leaf_provider;
 pub mod multisig;
 pub mod sudo;
+pub mod system;
 pub mod ton_app;

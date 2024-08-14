@@ -45,21 +45,21 @@ use crate::tx::SignedTx;
 use crate::types::PalletInfo;
 use crate::unsigned_tx::UnsignedTx;
 
-const SIGNER_PALLET: PalletInfo = PalletInfo::new("BridgeDataSigner");
-const VERIFIER_PALLET: PalletInfo = PalletInfo::new("MultisigVerifier");
+pub const SIGNER_PALLET: PalletInfo = PalletInfo::new("BridgeDataSigner");
+pub const VERIFIER_PALLET: PalletInfo = PalletInfo::new("MultisigVerifier");
 
-const SIGNER_APPROVALS: StorageDoubleMap<
+pub const SIGNER_APPROVALS: StorageDoubleMap<
     GenericNetworkId,
     H256,
     BTreeMap<sp_core::ecdsa::Public, sp_core::ecdsa::Signature>,
-> = StorageDoubleMap::new(SIGNER_PALLET, "approvals");
-const SIGNER_PEERS: StorageMap<GenericNetworkId, BTreeSet<sp_core::ecdsa::Public>, ()> =
-    StorageMap::new(SIGNER_PALLET, "peers");
+> = StorageDoubleMap::new(SIGNER_PALLET, "Approvals");
+pub const SIGNER_PEERS: StorageMap<GenericNetworkId, BTreeSet<sp_core::ecdsa::Public>, ()> =
+    StorageMap::new(SIGNER_PALLET, "Peers");
 
-const APPROVE_CALL: UnsignedTx<Approve> = UnsignedTx::new(SIGNER_PALLET, "approve");
+pub const APPROVE_CALL: UnsignedTx<Approve> = UnsignedTx::new(SIGNER_PALLET, "approve");
 
-const INITIALIZE_CALL: SignedTx<Register> = SignedTx::new(VERIFIER_PALLET, "initialize");
-const REGISTER_CALL: SignedTx<Register> = SignedTx::new(VERIFIER_PALLET, "register_network");
+pub const INITIALIZE_CALL: SignedTx<Register> = SignedTx::new(VERIFIER_PALLET, "initialize");
+pub const REGISTER_CALL: SignedTx<Register> = SignedTx::new(SIGNER_PALLET, "register_network");
 
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq, EncodeAsType, DecodeAsType)]
 pub struct Register {
@@ -70,7 +70,7 @@ pub struct Register {
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq, EncodeAsType, DecodeAsType)]
 pub struct Approve {
     pub network_id: StaticType<GenericNetworkId>,
-    pub message: StaticType<H256>,
+    pub data: StaticType<H256>,
     pub signature: StaticType<sp_core::ecdsa::Signature>,
 }
 
@@ -146,7 +146,7 @@ impl<T: subxt::Config> MultisigUnsignedTx<T> for crate::unsigned_tx::UnsignedTxs
                 self,
                 Approve {
                     network_id: StaticType(network_id),
-                    message: StaticType(message),
+                    data: StaticType(message),
                     signature: StaticType(signature),
                 },
             )
@@ -157,11 +157,11 @@ impl<T: subxt::Config> MultisigUnsignedTx<T> for crate::unsigned_tx::UnsignedTxs
 #[async_trait::async_trait]
 impl<T, P> MultisigTx<T> for crate::tx::SignedTxs<T, P>
 where
-    T: subxt::Config,
+    T: subxt::Config<ExtrinsicParams = subxt::config::DefaultExtrinsicParams<T>>,
     P: sp_core::Pair + Send + Sync + Clone,
-    <T::ExtrinsicParams as subxt::config::ExtrinsicParams<T>>::Params: Default + Send + Sync,
     T::Signature: From<P::Signature> + Send + Sync,
     T::AccountId: From<sp_runtime::AccountId32> + Send + Sync,
+    T::AssetId: Send + Sync,
 {
     async fn register_signer(
         &self,

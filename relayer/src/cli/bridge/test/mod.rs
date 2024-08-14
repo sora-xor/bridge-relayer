@@ -28,50 +28,29 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-contract Channel {
-    uint112 public messageNonce;
-    uint112 public batchNonce;
-    uint32 public peersCount;
+pub mod clear;
+pub mod evm;
+pub mod ton;
 
-    #[derive(Debug)]
-    struct Message {
-        address target;
-        uint256 max_gas;
-        bytes payload;
+use crate::cli::prelude::*;
+use clap::*;
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum Commands {
+    /// Run several TON relayers
+    Ton(ton::Command),
+    /// Run several EVM relayers
+    Evm(evm::Command),
+    /// Clear bridges data
+    Clear(clear::Command),
+}
+
+impl Commands {
+    pub async fn run(&self) -> AnyResult<()> {
+        match self {
+            Self::Ton(cmd) => cmd.run().await,
+            Self::Evm(cmd) => cmd.run().await,
+            Self::Clear(cmd) => cmd.run().await,
+        }
     }
-
-    #[derive(Debug)]
-    struct Batch {
-        uint256 nonce;
-        uint256 total_max_gas;
-        Message[] messages;
-    }
-
-    #[derive(Debug)]
-    event MessageDispatched(address source, uint256 nonce, bytes payload);
-
-    #[derive(Debug)]
-    event BatchDispatched(
-        uint256 batch_nonce,
-        address relayer,
-        uint256 results,
-        uint256 results_length,
-        uint256 gas_spent,
-        uint256 base_fee
-    );
-
-    #[derive(Debug)]
-    event ChangePeers(address peerId, bool removal);
-    
-    #[derive(Debug)]
-    event Reseted(uint256 peers);
-
-    function submit(
-        Batch calldata batch,
-        uint8[] calldata v,
-        bytes32[] calldata r,
-        bytes32[] calldata s
-    ) external virtual;
-
-    function reset(address[] calldata initialPeers) external;
 }

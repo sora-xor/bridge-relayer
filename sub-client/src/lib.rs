@@ -28,6 +28,9 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#[macro_use]
+extern crate tracing;
+
 pub mod abi;
 pub mod config;
 pub mod constant;
@@ -64,6 +67,7 @@ pub struct Client<T: subxt::Config, S> {
     rpc: subxt::backend::rpc::RpcClient,
     metadata: Arc<RwLock<BTreeMap<u32, subxt::Metadata>>>,
     signer: S,
+    nonce: Arc<RwLock<Option<u64>>>,
     at: Option<T::Hash>,
 }
 
@@ -75,6 +79,7 @@ impl<T: subxt::Config, S: Clone> Clone for Client<T, S> {
             metadata: self.metadata.clone(),
             signer: self.signer.clone(),
             at: self.at.clone(),
+            nonce: self.nonce.clone(),
         }
     }
 }
@@ -93,7 +98,12 @@ impl<T: subxt::Config> UnsignedClient<T> {
             signer: signer::Unsigned,
             metadata: Default::default(),
             at: None,
+            nonce: Default::default(),
         })
+    }
+
+    pub async fn follow_runtime_upgrades(&self) -> SubResult<()> {
+        Ok(self.inner.updater().perform_runtime_updates().await?)
     }
 
     pub fn signed<P>(&self, pair: P) -> SignedClient<T, P>
@@ -107,6 +117,7 @@ impl<T: subxt::Config> UnsignedClient<T> {
             metadata: self.metadata.clone(),
             signer: signer::Signed::new(pair),
             at: self.at.clone(),
+            nonce: self.nonce.clone(),
         }
     }
 }
@@ -123,6 +134,7 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
             metadata: self.metadata.clone(),
             signer: signer::Unsigned,
             at: self.at.clone(),
+            nonce: self.nonce.clone(),
         }
     }
 
@@ -180,6 +192,7 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
                 metadata: self.metadata.clone(),
                 signer: self.signer.clone(),
                 at: Some(block.hash()),
+                nonce: self.nonce.clone(),
             })
         } else {
             Ok(self.clone())
@@ -220,7 +233,7 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
     fn log_events(events: subxt::blocks::ExtrinsicEvents<T>) -> SubResult<()> {
         for event in events.iter() {
             let event = event?;
-            log::debug!(
+            debug!(
                 "{}::{}({})",
                 event.pallet_name(),
                 event.variant_name(),
@@ -239,37 +252,27 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
             let Some(status) = progress.next().await else {
                 return Err(Error::TxStatusMissing);
             };
-            match status? {
+            let status = status?;
+            match &status {
                 TxStatus::Validated
                 | TxStatus::NoLongerInBestBlock
-                | TxStatus::Broadcasted { num_peers: _ } => {}
-                TxStatus::Error { message } => return Err(Error::TxSubmit(message)),
-                TxStatus::Invalid { message } => return Err(Error::TxInvalid(message)),
-                TxStatus::Dropped { message } => return Err(Error::TxDropped(message)),
+                | TxStatus::Broadcasted { num_peers: _ } => {
+                    trace!("Skip status: {status:?}");
+                }
+                TxStatus::Error { message } => return Err(Error::TxSubmit(message.clone())),
+                TxStatus::Invalid { message } => return Err(Error::TxInvalid(message.clone())),
+                TxStatus::Dropped { message } => return Err(Error::TxDropped(message.clone())),
                 TxStatus::InBestBlock(tx) => {
-                    let events = tx.wait_for_success().await?;
-                    log::info!("Tx in block: {:?}", tx.block_hash());
-                    Self::log_events(events)?;
-                    return Ok(());
+                    tracing::info!("Tx in block: {:?}", tx.block_hash());
                 }
                 TxStatus::InFinalizedBlock(tx) => {
                     let events = tx.wait_for_success().await?;
-                    log::info!("Tx in block: {:?}", tx.block_hash());
+                    tracing::info!("Tx finalized: {:?}", tx.block_hash());
                     Self::log_events(events)?;
                     return Ok(());
                 }
             }
         }
-    }
-
-    pub async fn submit_unsigned<X: TxPayload>(&self, xt: &X) -> SubResult<()> {
-        let progress = self
-            .inner
-            .tx()
-            .create_unsigned(xt)?
-            .submit_and_watch()
-            .await?;
-        self.wait_for_success(progress).await
     }
 
     pub async fn unsigned_tx(&self) -> SubResult<unsigned_tx::UnsignedTxs<T>> {
@@ -280,7 +283,9 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
 impl<T, P> SignedClient<T, P>
 where
     T: subxt::Config,
-    P: Send + Sync + Clone + 'static,
+    P: sp_core::Pair + Send + Sync + Clone + 'static,
+    P::Signature: Into<T::Signature>,
+    T::AccountId: From<sp_runtime::AccountId32>,
 {
     pub fn signer(&self) -> &signer::Signed<P> {
         &self.signer
@@ -288,5 +293,24 @@ where
 
     pub async fn tx(&self) -> SubResult<tx::SignedTxs<T, P>> {
         tx::SignedTxs::from_client(self.clone()).await
+    }
+
+    #[instrument(skip(self), ret(level = "debug"))]
+    pub async fn nonce(&self) -> SubResult<u64> {
+        let mut nonce = self.nonce.write_arc().await;
+        if let Some(nonce) = nonce.as_mut() {
+            *nonce += 1;
+            Ok(*nonce)
+        } else {
+            let new_nonce = self
+                .inner
+                .blocks()
+                .at(self.block_ref(BlockNumberOrHash::Best).await?)
+                .await?
+                .account_nonce(&subxt::tx::Signer::<T>::account_id(self.signer()))
+                .await?;
+            *nonce = Some(new_nonce);
+            Ok(new_nonce)
+        }
     }
 }

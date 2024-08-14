@@ -64,12 +64,13 @@ impl<T: subxt::Config> UnsignedTxs<T> {
 pub struct UnsignedTx<CallData> {
     pallet: PalletInfo,
     call: &'static str,
+    #[derive_where(skip)]
     _phantom: PhantomData<CallData>,
 }
 
 impl<CallData> UnsignedTx<CallData>
 where
-    CallData: EncodeAsFields,
+    CallData: EncodeAsFields + std::fmt::Debug,
 {
     pub const fn new(pallet: PalletInfo, call: &'static str) -> Self {
         Self {
@@ -92,18 +93,33 @@ where
             .is_some()
     }
 
+    #[instrument(skip(txs, call_data), err(level = "warn"))]
     pub async fn submit<T: subxt::Config>(
         &self,
         txs: &UnsignedTxs<T>,
         call_data: CallData,
     ) -> SubResult<()> {
+        debug!("Call data: {call_data:?}");
         if self.is_supported(txs) {
-            let progress = txs
+            let res = txs
                 .txs
                 .create_unsigned(&self.payload(call_data))?
                 .submit_and_watch()
-                .await?;
-            txs.client().wait_for_success(progress).await
+                .await;
+            match res {
+                Ok(progress) => txs.client().wait_for_success(progress).await,
+                Err(err) => {
+                    let err_str = err.to_string();
+                    if err_str.contains("Transaction Already Imported")
+                        || err_str.contains("Transaction is temporarily banned")
+                    {
+                        info!("Probably transaction already submitted: {err:?}");
+                        Ok(())
+                    } else {
+                        Err(err.into())
+                    }
+                }
+            }
         } else {
             Err(Error::NotSupported(format!("{:?}", self)))
         }

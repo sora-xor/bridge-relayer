@@ -17,7 +17,7 @@ sp-core = { git = "https://github.com/sora-xor/polkadot-sdk.git", branch = "polk
 scale-decode = "0.13.1"
 scale-encode = "0.7.1"
 thiserror = "1.0.63"
-log = "0.4.22"
 async-trait = "0.1.81"
 async-lock = "3.4.0"
 derive-where = "1.2.7"
+tracing = "0.1.40"

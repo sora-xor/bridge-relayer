@@ -47,7 +47,12 @@ impl Command {
         info!("Peers: {:?}", peers);
         let eth = self.eth.get_signed_evm().await?;
         let channel = eth.signed_channel(self.channel)?;
-        let tx_hash = channel.reset().send().await?.watch().await?;
+        let tx_hash = channel
+            .reset(peers.into_iter().map(|a| a.0.into()).collect())
+            .send()
+            .await?
+            .watch()
+            .await?;
         debug!("Confirmed: {:?}", tx_hash);
         Ok(())
     }

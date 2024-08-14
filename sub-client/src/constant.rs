@@ -88,6 +88,7 @@ where
         StaticAddress::new_static(self.pallet.name, self.entry, [0u8; 32]).unvalidated()
     }
 
+    #[instrument(skip(consts))]
     pub fn fetch<T: subxt::Config>(&self, consts: &Constants<T>) -> SubResult<R> {
         if self.is_supported(consts) {
             Ok(consts.constants().at(&self.address())?.0)

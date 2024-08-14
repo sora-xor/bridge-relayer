@@ -36,6 +36,7 @@ use bridge_types::{ton::TonNetworkId, GenericNetworkId};
 use sp_core::ecdsa;
 use sp_runtime::BoundedVec;
 use sub_client::abi::channel::{GenericCommitment, MaxU32};
+use sub_client::types::BlockNumberOrHash;
 use ton_client::{types::StackEntry, TonClient};
 use toner::tlb::bits::bitvec::view::AsBits;
 use toner::{
@@ -174,7 +175,7 @@ impl Relay {
                             ));
                         }
                         Err(err) => {
-                            println!("Failed to parse body: {err:?}");
+                            warn!("Failed to parse body: {err:?}");
                         }
                     }
                 }
@@ -186,6 +187,8 @@ impl Relay {
     pub async fn sub_nonce(&self) -> AnyResult<u64> {
         let sub_nonce = self
             .sub
+            .at(BlockNumberOrHash::Best)
+            .await?
             .storage()
             .await?
             .inbound_nonce(self.ton_network_id)
@@ -206,6 +209,7 @@ impl Relay {
         Ok(())
     }
 
+    #[instrument(skip(self), name = "ton_multisig_ton_sub")]
     pub async fn run(self) -> AnyResult<()> {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
         loop {

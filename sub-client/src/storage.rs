@@ -80,6 +80,7 @@ impl<T: subxt::Config> Storages<T> {
 pub struct StorageEntry<R, Defaultable = Yes> {
     pub pallet: PalletInfo,
     pub entry: &'static str,
+    #[derive_where(skip)]
     _phantom: PhantomData<(R, Defaultable)>,
 }
 
@@ -99,6 +100,7 @@ where
         StaticAddress::new_static(self.pallet.name, self.entry, (), [0u8; 32]).unvalidated()
     }
 
+    #[instrument(skip(storage))]
     pub async fn fetch<T: subxt::Config>(&self, storage: &Storages<T>) -> SubResult<Option<R>> {
         if self.is_supported(storage) {
             Ok(storage.storage().fetch(&self.address()).await?.map(|v| v.0))
@@ -110,12 +112,20 @@ where
     pub fn is_supported<T: subxt::Config>(&self, storage: &Storages<T>) -> bool {
         storage.is_supported(self.pallet.name, self.entry)
     }
+
+    pub fn prefix(&self) -> [u8; 32] {
+        let mut prefix = [0u8; 32];
+        prefix[..16].copy_from_slice(&self.pallet.prefix());
+        prefix[16..].copy_from_slice(&sp_core::twox_128(self.entry.as_bytes()));
+        prefix
+    }
 }
 
 impl<R> StorageEntry<R, Yes>
 where
     R: Decode,
 {
+    #[instrument(skip(storage))]
     pub async fn fetch_or_default<T: subxt::Config>(&self, storage: &Storages<T>) -> SubResult<R> {
         if self.is_supported(storage) {
             Ok(storage.storage().fetch_or_default(&self.address()).await?.0)
@@ -129,12 +139,13 @@ where
 pub struct StorageMap<K, R, Defaultable = Yes> {
     pub pallet: PalletInfo,
     pub entry: &'static str,
+    #[derive_where(skip)]
     _phantom: PhantomData<(K, R, Defaultable)>,
 }
 
 impl<K, R, Defaultable> StorageMap<K, R, Defaultable>
 where
-    K: Encode,
+    K: Encode + std::fmt::Debug,
     R: Decode,
 {
     pub const fn new(pallet: PalletInfo, entry: &'static str) -> Self {
@@ -158,6 +169,7 @@ where
         .unvalidated()
     }
 
+    #[instrument(skip(storage))]
     pub async fn fetch<T: subxt::Config>(
         &self,
         storage: &Storages<T>,
@@ -177,13 +189,21 @@ where
     pub fn is_supported<T: subxt::Config>(&self, storage: &Storages<T>) -> bool {
         storage.is_supported(self.pallet.name, self.entry)
     }
+
+    pub fn prefix(&self) -> [u8; 32] {
+        let mut prefix = [0u8; 32];
+        prefix[..16].copy_from_slice(&self.pallet.prefix());
+        prefix[16..].copy_from_slice(&sp_core::twox_128(self.entry.as_bytes()));
+        prefix
+    }
 }
 
 impl<K, R> StorageMap<K, R, Yes>
 where
-    K: Encode,
+    K: Encode + std::fmt::Debug,
     R: Decode,
 {
+    #[instrument(skip(storage))]
     pub async fn fetch_or_default<T: subxt::Config>(
         &self,
         storage: &Storages<T>,
@@ -205,13 +225,14 @@ where
 pub struct StorageDoubleMap<K1, K2, R, Defaultable = Yes> {
     pub pallet: PalletInfo,
     pub entry: &'static str,
+    #[derive_where(skip)]
     _phantom: PhantomData<(K1, K2, R, Defaultable)>,
 }
 
 impl<K1, K2, R, Defaultable> StorageDoubleMap<K1, K2, R, Defaultable>
 where
-    K1: Encode,
-    K2: Encode,
+    K1: Encode + std::fmt::Debug,
+    K2: Encode + std::fmt::Debug,
     R: Decode,
 {
     pub const fn new(pallet: PalletInfo, entry: &'static str) -> Self {
@@ -237,6 +258,7 @@ where
         .unvalidated()
     }
 
+    #[instrument(skip(storage))]
     pub async fn fetch<T: subxt::Config>(
         &self,
         storage: &crate::Storages<T>,
@@ -257,14 +279,22 @@ where
     pub fn is_supported<T: subxt::Config>(&self, storage: &Storages<T>) -> bool {
         storage.is_supported(self.pallet.name, self.entry)
     }
+
+    pub fn prefix(&self) -> [u8; 32] {
+        let mut prefix = [0u8; 32];
+        prefix[..16].copy_from_slice(&self.pallet.prefix());
+        prefix[16..].copy_from_slice(&sp_core::twox_128(self.entry.as_bytes()));
+        prefix
+    }
 }
 
 impl<K1, K2, R> StorageDoubleMap<K1, K2, R, Yes>
 where
-    K1: Encode,
-    K2: Encode,
+    K1: Encode + std::fmt::Debug,
+    K2: Encode + std::fmt::Debug,
     R: Decode,
 {
+    #[instrument(skip(storage))]
     pub async fn fetch_or_default<T: subxt::Config>(
         &self,
         storage: &crate::Storages<T>,

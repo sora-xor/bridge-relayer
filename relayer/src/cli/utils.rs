@@ -37,6 +37,7 @@ use evm_client::alloy::providers::Provider;
 use evm_client::alloy::signers::Signer;
 use sub_client::bridge_types::ton::TonNetworkId;
 use sub_client::sp_core::{crypto::Ss58Codec, H160};
+use tracing::Instrument;
 
 #[derive(Args, Debug, Clone)]
 pub struct SubstrateClient {
@@ -65,8 +66,19 @@ impl SubstrateClient {
             .ok_or(CliError::SubstrateEndpoint)?)
     }
 
+    #[instrument]
     pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<SoraConfig>> {
         let sub = SubUnsignedClient::from_url(&self.get_url()?).await?;
+        let sub_cloned = sub.clone();
+        tokio::spawn(
+            async move {
+                if let Err(err) = sub_cloned.follow_runtime_upgrades().await {
+                    error!("Runtime upgrade subscriber failed: {err:?}, exiting...");
+                    std::process::exit(1);
+                }
+            }
+            .instrument(tracing::info_span!("runtime-upgrades")),
+        );
         Ok(sub)
     }
 
@@ -222,7 +234,7 @@ impl LiberlandClient {
 pub struct BridgePeers {
     /// Bridge peers
     #[clap(long)]
-    peers: Vec<String>,
+    pub peers: Vec<String>,
 }
 
 impl BridgePeers {

@@ -34,6 +34,7 @@ use bridge_types::evm::{InboundCommitment, StatusReport};
 use bridge_types::GenericNetworkId;
 use sp_core::ecdsa;
 use sub_client::abi::channel::ChannelStorage;
+use sub_client::types::BlockNumberOrHash;
 
 use crate::prelude::*;
 
@@ -75,12 +76,18 @@ impl SubstrateMessagesRelay {
         })
     }
 
+    #[instrument(err(level = "warn"), skip(self), fields(from, to))]
     pub async fn handle_messages(&mut self) -> AnyResult<()> {
         let current_eth_block = self.eth.get_finalized_block_number().await?;
         if current_eth_block < self.latest_channel_block {
-            debug!("Skip handling channel messages, current block number is less than latest basic {} < {}", current_eth_block, self.latest_channel_block);
+            debug!(
+                "Skip handling channel messages, current block number is less than latest handled"
+            );
             return Ok(());
         }
+        tracing::Span::current().record("to", current_eth_block);
+        tracing::Span::current().record("from", self.latest_channel_block);
+        debug!("Handle events",);
 
         self.handle_message_events(current_eth_block).await?;
         self.handle_batch_dispatched(current_eth_block).await?;
@@ -142,14 +149,11 @@ impl SubstrateMessagesRelay {
             .to_block(current_eth_block)
             .query()
             .await?;
-        debug!(
-            "Channel: Found {} Message events from {} to {}",
-            events.len(),
-            self.latest_channel_block,
-            current_eth_block
-        );
+        trace!("Channel: Found {} Message events", events.len(),);
         let mut sub_nonce = self
             .sub
+            .at(BlockNumberOrHash::Best)
+            .await?
             .storage()
             .await?
             .inbound_nonce(self.evm_network_id)
@@ -197,15 +201,12 @@ impl SubstrateMessagesRelay {
             .to_block(current_eth_block)
             .query()
             .await?;
-        debug!(
-            "Channel: Found {} BatchDispatched events from {} to {}",
-            events.len(),
-            self.latest_channel_block,
-            current_eth_block
-        );
+        trace!("Channel: Found {} BatchDispatched events", events.len(),);
 
         let mut sub_reported_nonce = self
             .sub
+            .at(BlockNumberOrHash::Best)
+            .await?
             .storage()
             .await?
             .reported_nonce(self.evm_network_id)
@@ -252,6 +253,7 @@ impl SubstrateMessagesRelay {
         Ok(())
     }
 
+    #[instrument(skip(self), name = "evm_multisig_evm_sub")]
     pub async fn run(mut self) -> AnyResult<()> {
         let current_eth_block = self.eth.get_finalized_block_number().await?;
 
@@ -269,10 +271,16 @@ impl SubstrateMessagesRelay {
             .filter_map(|(_log, meta)| meta.block_number)
             .max()
             .unwrap_or(self.latest_channel_block);
+        let mut attempts = 0;
         loop {
-            debug!("Handle channel messages");
             if let Err(err) = self.handle_messages().await {
+                if attempts > 3 {
+                    return Err(err);
+                }
+                attempts += 1;
                 warn!("Failed to handle channel messages: {}", err);
+            } else {
+                attempts = 0;
             }
             tokio::time::sleep(Duration::from_secs(10)).await;
         }

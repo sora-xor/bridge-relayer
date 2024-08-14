@@ -30,6 +30,7 @@
 
 mod register;
 mod relay;
+mod test;
 mod transfer;
 
 use crate::cli::prelude::*;
@@ -45,6 +46,9 @@ pub(crate) enum Commands {
     /// Transfer operations for bridge
     #[clap(subcommand)]
     Transfer(transfer::Commands),
+    /// Useful commands for bridge testing
+    #[clap(subcommand)]
+    Test(test::Commands),
 }
 
 impl Commands {
@@ -53,6 +57,7 @@ impl Commands {
             Commands::Relay(cmd) => cmd.run().await,
             Commands::Register(cmd) => cmd.run().await,
             Commands::Transfer(cmd) => cmd.run().await,
+            Commands::Test(cmd) => cmd.run().await,
         }
     }
 }

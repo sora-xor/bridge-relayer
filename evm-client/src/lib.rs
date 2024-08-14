@@ -36,18 +36,26 @@ use alloy::{
     network::{Ethereum, EthereumWallet, NetworkWallet},
     primitives::{Address, B256, U256},
     providers::{
-        fillers::{FillProvider, WalletFiller},
-        Provider, RootProvider,
+        fillers::{ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller},
+        Identity, Provider, RootProvider,
     },
     sol_types::SolValue,
     transports::BoxTransport,
 };
 use error::{Error, EvmResult};
 
-pub type UnsignedProvider = RootProvider<BoxTransport>;
+pub type UnsignedFiller =
+    JoinFill<JoinFill<JoinFill<Identity, GasFiller>, NonceFiller>, ChainIdFiller>;
 
-pub type SignedProvider =
-    FillProvider<WalletFiller<EthereumWallet>, UnsignedProvider, BoxTransport, Ethereum>;
+pub type UnsignedProvider =
+    FillProvider<UnsignedFiller, RootProvider<BoxTransport>, BoxTransport, Ethereum>;
+
+pub type SignedProvider = FillProvider<
+    JoinFill<UnsignedFiller, WalletFiller<EthereumWallet>>,
+    RootProvider<BoxTransport>,
+    BoxTransport,
+    Ethereum,
+>;
 
 #[derive(Clone)]
 pub struct Client {
@@ -58,6 +66,7 @@ pub struct Client {
 impl Client {
     pub async fn from_url(url: &str) -> EvmResult<Self> {
         let provider = alloy::providers::ProviderBuilder::new()
+            .with_recommended_fillers()
             .on_builtin(url)
             .await?;
         Ok(Self {
@@ -70,11 +79,18 @@ impl Client {
         self.provider.clone()
     }
 
+    pub fn unsigned(&self) -> Self {
+        Self {
+            provider: self.provider.clone(),
+            wallet: None,
+        }
+    }
+
     pub fn signed_provider(&self) -> EvmResult<SignedProvider> {
-        Ok(FillProvider::new(
-            self.provider.clone(),
-            WalletFiller::new(self.wallet()?),
-        ))
+        Ok(self
+            .provider
+            .clone()
+            .join_with(WalletFiller::new(self.wallet()?)))
     }
 
     pub fn wallet(&self) -> EvmResult<EthereumWallet> {

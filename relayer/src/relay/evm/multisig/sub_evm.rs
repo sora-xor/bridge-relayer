@@ -137,7 +137,7 @@ impl Relay {
         signed_message: H256,
     ) -> AnyResult<()> {
         let Ok(channel) = self.evm.signed_channel(self.channel) else {
-            log::debug!("Don't have a relayer account private key, skipping commitment send");
+            debug!("Don't have a relayer account private key, skipping commitment send");
             return Ok(());
         };
         let batch = Self::prepare_batch(&commitment);
@@ -262,6 +262,7 @@ impl Relay {
         Ok(peers.iter().any(|public| signer_public == *public))
     }
 
+    #[instrument(skip(self), name = "evm_multisig_sub_evm")]
     pub async fn run(self) -> AnyResult<()> {
         if self.signer.is_some() && !self.is_peer().await? {
             return Err(anyhow::anyhow!("Provided signer key is not a peer"));
@@ -280,11 +281,8 @@ impl Relay {
                 }
                 continue;
             }
-            info!(
-                "Submit commitments from {} to {}",
-                inbound_nonce, outbound_nonce
-            );
             for nonce in (inbound_nonce + 1)..=outbound_nonce {
+                info!("Submit commitment: {nonce}");
                 let offchain_data = self
                     .sub
                     .commitment_with_nonce(self.evm_network_id.into(), nonce)
