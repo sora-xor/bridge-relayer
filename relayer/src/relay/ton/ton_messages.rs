@@ -146,7 +146,7 @@ impl Relay {
         let mut messages = vec![];
         let res = self
             .ton
-            .get_transactions(self.channel, None, None, None, None)
+            .get_transactions(self.channel, None, None, None, Some(true))
             .await?;
         for tx in res {
             for msg in tx.out_msgs {
