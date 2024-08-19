@@ -36,6 +36,7 @@ use sp_core::{ecdsa, H256};
 use std::time::Duration;
 use sub_client::{abi::channel::MaxU32, sp_runtime::traits::Hash};
 
+#[derive(Default)]
 pub struct RelayBuilder {
     sender: Option<SubUnsignedClient<SoraConfig>>,
     receiver: Option<EvmClient>,
@@ -43,16 +44,6 @@ pub struct RelayBuilder {
     signer: Option<ecdsa::Pair>,
 }
 
-impl Default for RelayBuilder {
-    fn default() -> Self {
-        Self {
-            sender: None,
-            receiver: None,
-            channel: None,
-            signer: None,
-        }
-    }
-}
 
 impl RelayBuilder {
     pub fn new() -> Self {
@@ -148,9 +139,7 @@ impl Relay {
             .await?
             .approvals(self.evm_network_id, signed_message)
             .await?;
-        let (v, r, s) = approvals
-            .into_iter()
-            .map(|(_, approval)| {
+        let (v, r, s) = approvals.into_values().map(|approval| {
                 (
                     approval.0[64],
                     approval.0[..32].try_into().unwrap(),
@@ -204,15 +193,15 @@ impl Relay {
     }
 
     fn prepare_message_to_sign(&self, commitment: &OutboundCommitment<MaxU32, MaxU32>) -> H256 {
-        let batch = Self::prepare_batch(&commitment);
+        let batch = Self::prepare_batch(commitment);
         let batch_hash = sp_runtime::traits::Keccak256::hash(&batch.abi_encode());
         let message = sp_runtime::traits::Keccak256::hash_of(&(
             self.sub_network_id,
             self.evm_network_id,
             batch_hash,
         ));
-        let message = Self::prepare_evm_signed_message(message);
-        message
+        
+        Self::prepare_evm_signed_message(message)
     }
 
     async fn approve_and_send_commitment(&self, commitment: GenericCommitment) -> AnyResult<()> {
@@ -285,7 +274,7 @@ impl Relay {
                 info!("Submit commitment: {nonce}");
                 let offchain_data = self
                     .sub
-                    .commitment_with_nonce(self.evm_network_id.into(), nonce)
+                    .commitment_with_nonce(self.evm_network_id, nonce)
                     .await?;
                 self.approve_and_send_commitment(offchain_data.commitment)
                     .await?;

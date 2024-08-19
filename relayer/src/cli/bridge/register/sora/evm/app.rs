@@ -48,7 +48,7 @@ pub(crate) struct Command {
 #[derive(Subcommand, Debug)]
 pub(crate) enum Apps {
     /// Register ERC20App
-    FungibleNew {
+    New {
         /// ERC20App contract address
         #[clap(long)]
         contract: H160,
@@ -60,13 +60,13 @@ pub(crate) enum Apps {
         precision: u8,
     },
     /// Register EthApp with predefined ETH asset id
-    FungiblePredefined {
+    Predefined {
         /// EthApp contract address
         #[clap(long)]
         contract: H160,
     },
     /// Register EthApp with predefined ETH asset id
-    FungibleExisting {
+    Existing {
         /// EthApp contract address
         #[clap(long)]
         contract: H160,
@@ -96,7 +96,7 @@ impl Command {
         }
 
         match &self.apps {
-            Apps::FungibleNew {
+            Apps::New {
                 contract,
                 name,
                 symbol,
@@ -111,11 +111,11 @@ impl Command {
                 )
                 .await?
             }
-            Apps::FungiblePredefined { contract } => {
+            Apps::Predefined { contract } => {
                 tx.register_network_with_existing_asset(network_id, *contract, ETH.into(), 18)
                     .await?
             }
-            Apps::FungibleExisting {
+            Apps::Existing {
                 contract,
                 asset_id,
                 precision,
@@ -135,9 +135,9 @@ impl Command {
         network_id: EVMChainId,
     ) -> AnyResult<bool> {
         let (contract, registered) = match self.apps {
-            Apps::FungibleNew { contract, .. }
-            | Apps::FungibleExisting { contract, .. }
-            | Apps::FungiblePredefined { contract, .. } => {
+            Apps::New { contract, .. }
+            | Apps::Existing { contract, .. }
+            | Apps::Predefined { contract, .. } => {
                 let registered = sub.app_address(network_id).await?;
                 (contract, registered)
             }

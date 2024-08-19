@@ -74,11 +74,7 @@ impl<T: subxt::Config> crate::UnsignedClient<T> {
             .filter(|log| {
                 let AuxiliaryDigestItem::Commitment(digest_network_id, digest_commitment_hash) =
                     log;
-                if network_id != *digest_network_id && commitment_hash != *digest_commitment_hash {
-                    false
-                } else {
-                    true
-                }
+                !(network_id != *digest_network_id && commitment_hash != *digest_commitment_hash)
             })
             .count();
         if valid_items != 1 {

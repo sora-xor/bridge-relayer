@@ -163,7 +163,7 @@ impl EvmClientCli {
     }
 
     pub async fn get_unsigned_evm(&self) -> AnyResult<EvmClient> {
-        Ok(EvmClient::from_url(&self.get_url()?.to_string()).await?)
+        Ok(EvmClient::from_url(self.get_url()?.as_ref()).await?)
     }
 
     pub async fn get_signed_evm(&self) -> AnyResult<EvmClient> {

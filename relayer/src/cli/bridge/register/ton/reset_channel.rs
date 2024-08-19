@@ -50,7 +50,7 @@ impl Command {
             .await?;
         info!(
             "Submitted Reset to channel: {}",
-            base64::engine::general_purpose::STANDARD.encode(&tx_hash)
+            base64::engine::general_purpose::STANDARD.encode(tx_hash)
         );
         Ok(())
     }

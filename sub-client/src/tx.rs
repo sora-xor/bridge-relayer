@@ -124,7 +124,7 @@ where
         debug!("Call data: {call_data:?}");
         if self.is_supported(txs) {
             let nonce = txs.client().nonce().await?;
-            tracing::Span::current().record("nonce", &nonce);
+            tracing::Span::current().record("nonce", nonce);
             let progress = txs
                 .txs
                 .sign_and_submit_then_watch(
@@ -158,7 +158,7 @@ where
         if self.is_supported(txs) || txs.is_supported(SudoCall::<()>::PALLET, SudoCall::<()>::CALL)
         {
             let nonce = txs.client().nonce().await?;
-            tracing::Span::current().record("nonce", &nonce);
+            tracing::Span::current().record("nonce", nonce);
             let progress = txs
                 .txs
                 .sign_and_submit_then_watch(

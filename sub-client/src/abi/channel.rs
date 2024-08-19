@@ -125,7 +125,7 @@ pub const INBOUND_REGISTER_TON: SignedTx<
     GenericRegister<StaticType<TonNetworkId>, StaticType<TonAddress>>,
 > = SignedTx::new(INBOUND_PALLET, "register_ton_channel");
 
-pub type MaxU32 = sp_core::ConstU32<{ std::u32::MAX }>;
+pub type MaxU32 = sp_core::ConstU32<{ u32::MAX }>;
 pub type GenericCommitment = bridge_types::GenericCommitment<MaxU32, MaxU32>;
 pub type GenericCommitmentWithBlock<T> = bridge_types::types::GenericCommitmentWithBlock<
     <<T as subxt::Config>::Header as subxt::config::Header>::Number,
@@ -491,6 +491,7 @@ where
         network_id: GenericNetworkId,
         nonce: u64,
     ) -> SubResult<GenericCommitmentWithBlock<T>> {
+        use std::cmp::Ordering;
         let mut client = self.at(BlockNumberOrHash::Finalized).await?;
         loop {
             let commitment = client
@@ -499,14 +500,14 @@ where
                 .latest_commitment(network_id)
                 .await?
                 .ok_or(Error::CommitmentNotFound(nonce))?;
-            if commitment.commitment.nonce() == nonce {
-                return Ok(commitment);
-            } else if commitment.commitment.nonce() < nonce {
-                return Err(Error::CommitmentNotFound(nonce));
-            } else {
-                client = client
-                    .at(BlockNumberOrHash::Number(commitment.block_number.into()))
-                    .await?;
+            match commitment.commitment.nonce().cmp(&nonce) {
+                Ordering::Equal => return Ok(commitment),
+                Ordering::Less => return Err(Error::CommitmentNotFound(nonce)),
+                Ordering::Greater => {
+                    client = client
+                        .at(BlockNumberOrHash::Number(commitment.block_number.into()))
+                        .await?;
+                }
             }
         }
     }
@@ -536,8 +537,7 @@ where
                 .await?
                 .approvals(sender, message)
                 .await?
-                .into_iter()
-                .map(|(_, s)| s)
+                .into_values()
                 .collect::<Vec<_>>();
             let proof = MultiProof::EVM(EVMProof { proof: approvals });
             self.unsigned_tx()

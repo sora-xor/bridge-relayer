@@ -78,7 +78,7 @@ impl<T: subxt::Config, S: Clone> Clone for Client<T, S> {
             rpc: self.rpc.clone(),
             metadata: self.metadata.clone(),
             signer: self.signer.clone(),
-            at: self.at.clone(),
+            at: self.at,
             nonce: self.nonce.clone(),
         }
     }
@@ -116,7 +116,7 @@ impl<T: subxt::Config> UnsignedClient<T> {
             rpc: self.rpc.clone(),
             metadata: self.metadata.clone(),
             signer: signer::Signed::new(pair),
-            at: self.at.clone(),
+            at: self.at,
             nonce: self.nonce.clone(),
         }
     }
@@ -133,7 +133,7 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
             rpc: self.rpc.clone(),
             metadata: self.metadata.clone(),
             signer: signer::Unsigned,
-            at: self.at.clone(),
+            at: self.at,
             nonce: self.nonce.clone(),
         }
     }
@@ -143,7 +143,7 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
     }
 
     pub async fn storage(&self) -> SubResult<Storages<T>> {
-        Ok(Storages::from_client(self.unsigned()).await?)
+        Storages::from_client(self.unsigned()).await
     }
 
     pub fn constants(&self) -> Constants<T> {
@@ -206,25 +206,25 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
         let at = at.into();
         let block_hash = match at {
             BlockNumberOrHash::Number(n) => {
-                let hash = self
+                
+                self
                     .methods()
                     .chain_get_block_hash(Some(n.into()))
                     .await?
-                    .ok_or(Error::BlockNotFound(at))?;
-                hash
+                    .ok_or(Error::BlockNotFound(at))?
             }
             BlockNumberOrHash::Hash(h) => T::Hash::decode(&mut &h[..])?,
             BlockNumberOrHash::Best => {
-                let hash = self
+                
+                self
                     .methods()
                     .chain_get_block_hash(None)
                     .await?
-                    .ok_or(Error::BlockNotFound(at))?;
-                hash
+                    .ok_or(Error::BlockNotFound(at))?
             }
             BlockNumberOrHash::Finalized => {
-                let hash = self.methods().chain_get_finalized_head().await?;
-                hash
+                
+                self.methods().chain_get_finalized_head().await?
             }
         };
         Ok(block_hash.into())

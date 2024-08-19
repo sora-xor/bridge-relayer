@@ -229,6 +229,9 @@ pub struct StorageDoubleMap<K1, K2, R, Defaultable = Yes> {
     _phantom: PhantomData<(K1, K2, R, Defaultable)>,
 }
 
+pub type StorageDoubleAddress<K1, K2, R, Defaultable> =
+    StaticAddress<(StaticStorageKey<K1>, StaticStorageKey<K2>), Static<R>, Yes, Defaultable, Yes>;
+
 impl<K1, K2, R, Defaultable> StorageDoubleMap<K1, K2, R, Defaultable>
 where
     K1: Encode + std::fmt::Debug,
@@ -243,12 +246,7 @@ where
         }
     }
 
-    pub fn address(
-        &self,
-        key1: K1,
-        key2: K2,
-    ) -> StaticAddress<(StaticStorageKey<K1>, StaticStorageKey<K2>), Static<R>, Yes, Defaultable, Yes>
-    {
+    pub fn address(&self, key1: K1, key2: K2) -> StorageDoubleAddress<K1, K2, R, Defaultable> {
         StaticAddress::new_static(
             self.pallet.name,
             self.entry,

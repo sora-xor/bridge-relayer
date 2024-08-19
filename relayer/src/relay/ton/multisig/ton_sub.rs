@@ -127,7 +127,7 @@ impl Relay {
             .run_get_method(self.channel, "outboundNonce", vec![], None)
             .await?;
         if res.exit_code == 0 {
-            if let Some(StackEntry::Int(nonce)) = res.stack.get(0) {
+            if let Some(StackEntry::Int(nonce)) = res.stack.first() {
                 Ok(*nonce as u64)
             } else {
                 Err(anyhow!("Got wrong nonce stack"))

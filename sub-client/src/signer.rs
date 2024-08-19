@@ -52,7 +52,7 @@ where
     pub fn new(signer: Pair) -> Self {
         let account_id = <MultiSignature as Verify>::Signer::from(signer.public()).into_account();
         Self {
-            account_id: account_id,
+            account_id,
             signer,
         }
     }
