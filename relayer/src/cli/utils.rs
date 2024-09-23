@@ -35,6 +35,7 @@ use crate::prelude::*;
 use clap::*;
 use evm_client::alloy::providers::Provider;
 use evm_client::alloy::signers::Signer;
+use metrics::IntoLabels;
 use sub_client::bridge_types::ton::TonNetworkId;
 use sub_client::sp_core::{crypto::Ss58Codec, H160};
 use tracing::Instrument;
@@ -68,7 +69,9 @@ impl SubstrateClient {
 
     #[instrument]
     pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<SoraConfig>> {
-        let sub = SubUnsignedClient::from_url(&self.get_url()?).await?;
+        let sub =
+            SubUnsignedClient::from_url(&self.get_url()?, [("network", "sora")].into_labels())
+                .await?;
         let sub_cloned = sub.clone();
         tokio::spawn(
             async move {
@@ -121,7 +124,9 @@ impl ParachainClient {
     }
 
     pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<ParachainConfig>> {
-        let sub = SubUnsignedClient::from_url(&self.get_url()?).await?;
+        let sub =
+            SubUnsignedClient::from_url(&self.get_url()?, [("network", "parachain")].into_labels())
+                .await?;
         Ok(sub)
     }
 
@@ -215,7 +220,9 @@ impl LiberlandClient {
     }
 
     pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<LiberlandConfig>> {
-        let sub = SubUnsignedClient::from_url(&self.get_url()?).await?;
+        let sub =
+            SubUnsignedClient::from_url(&self.get_url()?, [("network", "liberland")].into_labels())
+                .await?;
         Ok(sub)
     }
 

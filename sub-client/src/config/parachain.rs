@@ -29,7 +29,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use sp_core::H256;
-use sp_runtime::{AccountId32, MultiSignature};
+use sp_runtime::{AccountId32, MultiAddress, MultiSignature};
 use subxt::config::substrate::{BlakeTwo256, SubstrateHeader};
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -38,7 +38,7 @@ pub enum ParachainConfig {}
 impl subxt::Config for ParachainConfig {
     type Hash = H256;
     type AccountId = AccountId32;
-    type Address = Self::AccountId;
+    type Address = MultiAddress<AccountId32, ()>;
     type Signature = MultiSignature;
     type Hasher = BlakeTwo256;
     type Header = SubstrateHeader<u32, BlakeTwo256>;

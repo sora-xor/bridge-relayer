@@ -135,6 +135,8 @@ where
             .await?
             .inbound_nonce(self.sender_network_id.into())
             .await?;
+        let counter = metrics::counter!(SUB_INBOUND_NONCE, self.receiver.labels());
+        counter.absolute(nonce);
         Ok(nonce)
     }
 
@@ -145,6 +147,8 @@ where
             .await?
             .outbound_nonce(self.receiver_network_id.into())
             .await?;
+        let counter = metrics::counter!(SUB_OUTBOUND_NONCE, self.sender.labels());
+        counter.absolute(nonce);
         Ok(nonce)
     }
 
@@ -222,6 +226,7 @@ where
                 continue;
             }
             for nonce in (inbound_nonce + 1)..=outbound_nonce {
+                metrics::counter!(SUB_CURRENT_NONCE, self.sender.labels()).absolute(nonce);
                 let offchain_data = self
                     .sender
                     .commitment_with_nonce(self.receiver_network_id.into(), nonce)

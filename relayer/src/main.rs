@@ -29,6 +29,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod cli;
+mod metrics;
 mod relay;
 use clap::Parser;
 use prelude::*;
@@ -64,6 +65,7 @@ fn init_log() {
 }
 
 pub mod prelude {
+    pub use crate::metrics::*;
     pub use anyhow::{Context, Result as AnyResult};
     pub use codec::{Decode, Encode};
     pub use either::Either;

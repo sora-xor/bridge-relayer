@@ -58,6 +58,7 @@ impl Command {
         ] {
             let tx = tx.clone();
             set.spawn(async move { tx.kill_prefix(pallet.prefix().to_vec(), 1000).await });
+            // tx.kill_prefix(pallet.prefix().to_vec(), 1000).await?;
         }
 
         while let Some(res) = set.join_next().await {

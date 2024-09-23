@@ -12,11 +12,6 @@ tokio = { version = "1.14.0", features = ["full"] }
 url = "2.2.2"
 http = "0.2.6"
 anyhow = "1.0.51"
-jsonrpsee = { version = "0.16.2", features = [
-  "macros",
-  "ws-client",
-  "http-client",
-] }
 clap = { version = "4.4", features = ["derive"] }
 async-trait = "0.1.56"
 hex = "0.4.3"
@@ -44,3 +39,5 @@ num-bigint = "0.4.6"
 base64 = "0.22.1"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+metrics = "0.23.0"
+metrics-exporter-prometheus = "0.15.3"

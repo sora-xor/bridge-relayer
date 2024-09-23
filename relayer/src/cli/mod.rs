@@ -33,7 +33,7 @@ mod error;
 mod mint_test_token;
 pub mod utils;
 
-use std::path::PathBuf;
+use std::{net::SocketAddr, path::PathBuf};
 
 pub use utils::*;
 
@@ -103,12 +103,26 @@ pub struct Cli {
     /// Path for gas estimations
     #[clap(long, global = true)]
     gas_metrics_path: Option<PathBuf>,
+    /// Enable Prometheus metrics
+    #[clap(long, global = true)]
+    enable_metrics: bool,
+    /// Prometheus endpoint address
+    #[clap(long, global = true)]
+    prometheus_address: Option<SocketAddr>,
     #[clap(subcommand)]
     commands: Commands,
 }
 
 impl Cli {
     pub async fn run(&self) -> AnyResult<()> {
+        if self.enable_metrics {
+            let mut builder = metrics_exporter_prometheus::PrometheusBuilder::new();
+            if let Some(address) = &self.prometheus_address {
+                builder = builder.with_http_listener(*address);
+            }
+            builder.install()?;
+            crate::metrics::describe_metrics();
+        }
         self.commands.run().await
     }
 }

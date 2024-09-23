@@ -21,3 +21,6 @@ async-trait = "0.1.81"
 async-lock = "3.4.0"
 derive-where = "1.2.7"
 tracing = "0.1.40"
+metrics = "0.23.0"
+jsonrpsee = { version = "0.22.0", features = ["macros", "client"] }
+url = "2.5.2"

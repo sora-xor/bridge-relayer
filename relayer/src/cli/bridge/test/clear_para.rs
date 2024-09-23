@@ -28,54 +28,40 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use codec::{Decode, Encode};
-use scale_decode::DecodeAsType;
-use scale_encode::EncodeAsType;
+use sub_client::{abi::system::SystemTx, types::PalletInfo};
 
-use crate::{tx::SignedTx, types::PalletInfo, SubResult};
+use crate::cli::prelude::*;
 
-#[derive(Clone, Encode, Decode, PartialEq, Eq, EncodeAsType, DecodeAsType)]
-pub struct KillPrefix {
-    prefix: Vec<u8>,
-    subkeys: u32,
+#[derive(Args, Clone, Debug)]
+pub(crate) struct Command {
+    #[clap(flatten)]
+    para: ParachainClient,
 }
 
-impl core::fmt::Debug for KillPrefix {
-    fn fmt(
-        &self,
-        f: &mut scale_info::prelude::fmt::Formatter<'_>,
-    ) -> scale_info::prelude::fmt::Result {
-        f.debug_struct("KillPrefix")
-            .field(
-                "prefix",
-                &sp_core::hexdisplay::HexDisplay::from(&self.prefix),
-            )
-            .field("subkeys", &self.subkeys)
-            .finish()
-    }
-}
+impl Command {
+    pub(super) async fn run(&self) -> AnyResult<()> {
+        let para = self.para.get_signed_substrate().await?;
 
-const PALLET: PalletInfo = PalletInfo::new("System");
+        let tx = para.tx().await?;
+        let mut set = tokio::task::JoinSet::new();
+        for pallet in [
+            PalletInfo::new("XCMApp"),
+            sub_client::abi::channel::SUB_INBOUND_PALLET,
+            sub_client::abi::channel::SUB_OUTBOUND_PALLET,
+            sub_client::abi::channel::INBOUND_PALLET,
+            sub_client::abi::channel::OUTBOUND_PALLET,
+            sub_client::abi::multisig::VERIFIER_PALLET,
+            sub_client::abi::multisig::SIGNER_PALLET,
+        ] {
+            let tx = tx.clone();
+            set.spawn(async move { tx.kill_prefix(pallet.prefix().to_vec(), 1000).await });
+            // tx.kill_prefix(pallet.prefix().to_vec(), 1000).await?;
+        }
 
-const KILL_PREFIX_CALL: SignedTx<KillPrefix> = SignedTx::new(PALLET, "kill_prefix");
+        while let Some(res) = set.join_next().await {
+            res??;
+        }
 
-#[async_trait::async_trait]
-pub trait SystemTx<T: subxt::Config> {
-    async fn kill_prefix(&self, prefix: Vec<u8>, subkeys: u32) -> SubResult<()>;
-}
-
-#[async_trait::async_trait]
-impl<T, P> SystemTx<T> for crate::tx::SignedTxs<T, P>
-where
-    T: subxt::Config<ExtrinsicParams = subxt::config::DefaultExtrinsicParams<T>>,
-    P: sp_core::Pair + Send + Sync + Clone,
-    T::Signature: From<P::Signature> + Send + Sync,
-    T::AccountId: From<sp_runtime::AccountId32> + Send + Sync,
-    T::AssetId: Send + Sync,
-{
-    async fn kill_prefix(&self, prefix: Vec<u8>, subkeys: u32) -> SubResult<()> {
-        KILL_PREFIX_CALL
-            .submit_sudo(self, KillPrefix { prefix, subkeys })
-            .await
+        Ok(())
     }
 }

@@ -29,6 +29,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use bridge_types::GenericNetworkId;
+use jsonrpsee::client_transport::ws::WsHandshakeError;
 use thiserror::Error;
 
 use crate::types::BlockNumberOrHash;
@@ -43,6 +44,10 @@ pub enum Error {
     SubxtMetadata(#[from] subxt::ext::subxt_core::error::MetadataError),
     #[error("Codec error: {0}")]
     Codec(#[from] codec::Error),
+    #[error("Url parse error: {0}")]
+    UrlParse(#[from] url::ParseError),
+    #[error("Ws handshake error: {0}")]
+    WsHandshake(#[from] WsHandshakeError),
     #[error("Tx error: {0}")]
     TxSubmit(String),
     #[error("Tx invalid: {0}")]

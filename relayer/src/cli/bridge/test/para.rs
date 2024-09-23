@@ -28,12 +28,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use sub_client::{
-    abi::{channel::ChannelSignedTx, ton_app::TonAppTx},
-    bridge_types::ton::{TonAddress, TonNetworkId},
-    sp_runtime::traits::IdentifyAccount,
-};
-use toner::ton::MsgAddress;
+use sub_client::{bridge_types::SubNetworkId, sp_runtime::traits::IdentifyAccount};
 use tracing::Instrument;
 
 use crate::cli::prelude::*;
@@ -43,11 +38,7 @@ pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    ton: TonClientCli,
-    #[clap(long)]
-    channel: MsgAddress,
-    #[clap(long)]
-    app: MsgAddress,
+    para: ParachainClient,
     /// Signer for bridge messages
     #[clap(long)]
     seed: String,
@@ -58,7 +49,7 @@ pub(crate) struct Command {
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let sub = self.sub.get_signed_substrate().await?;
-        let ton = self.ton.get_unsigned_ton()?;
+        let para = self.para.get_signed_substrate().await?;
         let mut signers = vec![];
         let mut peers = vec![];
         for i in 0..self.count {
@@ -76,39 +67,81 @@ impl Command {
             signers.push((i, signer));
         }
 
+        let mut set = tokio::task::JoinSet::new();
+
         let tx = sub.tx().await?;
-        tx.register_signer(TonNetworkId::Testnet.into(), peers.clone())
-            .await?;
-        tx.register_verifier(TonNetworkId::Testnet.into(), peers.clone())
-            .await?;
-        tx.register_ton_channel(
-            TonNetworkId::Testnet.into(),
-            TonAddress::new(self.channel.workchain_id as i8, self.channel.address.into()),
-        )
-        .await?;
-        tx.register_network(
-            TonNetworkId::Testnet,
-            TonAddress::new(self.app.workchain_id as i8, self.app.address.into()),
-            b"TON".into(),
-            b"TON".into(),
-            9,
-        )
-        .await?;
+        set.spawn({
+            let tx = tx.clone();
+            let peers = peers.clone();
+            async move { tx.register_signer(SubNetworkId::Rococo.into(), peers).await }
+        });
+        set.spawn({
+            let tx = tx.clone();
+            let peers = peers.clone();
+            async move {
+                tx.register_verifier(SubNetworkId::Rococo.into(), peers)
+                    .await
+            }
+        });
+
+        let tx = para.tx().await?;
+        set.spawn({
+            let tx = tx.clone();
+            let peers = peers.clone();
+            async move {
+                tx.register_signer(SubNetworkId::Mainnet.into(), peers)
+                    .await
+            }
+        });
+        set.spawn({
+            let tx = tx.clone();
+            let peers = peers.clone();
+            async move {
+                tx.register_verifier(SubNetworkId::Mainnet.into(), peers)
+                    .await
+            }
+        });
+
+        while let Some(res) = set.join_next().await {
+            res??;
+        }
 
         let mut set = tokio::task::JoinSet::new();
         for (i, signer) in signers {
-            let relay = crate::relay::ton::multisig::ton_sub::RelayBuilder::new()
-                .with_channel(self.channel)
-                .with_signer(signer)
-                .with_sub_client(
+            let para_sora_relay = crate::relay::sub::multisig::RelayBuilder::new()
+                .with_receiver_client(
                     sub.unsigned()
-                        .with_label((&"relay_id", &i.to_string()).into()),
+                        .with_label((&"para_sora_receiver", &i.to_string()).into()),
                 )
-                .with_ton_client(ton.clone())
-                .with_ton_network_id(TonNetworkId::Testnet)
+                .with_sender_client(
+                    para.unsigned()
+                        .with_label((&"para_sora_sender", &i.to_string()).into()),
+                )
+                .with_signer(signer.clone())
                 .build()
                 .await?;
-            set.spawn(relay.run().instrument(tracing::info_span!("relay", id = i)));
+            let sora_para_relay = crate::relay::sub::multisig::RelayBuilder::new()
+                .with_receiver_client(
+                    para.unsigned()
+                        .with_label((&"sora_para_receiver", &i.to_string()).into()),
+                )
+                .with_sender_client(
+                    sub.unsigned()
+                        .with_label((&"sora_para_sender", &i.to_string()).into()),
+                )
+                .with_signer(signer)
+                .build()
+                .await?;
+            set.spawn(
+                sora_para_relay
+                    .run()
+                    .instrument(tracing::info_span!("sora_para_relay", id = i)),
+            );
+            set.spawn(
+                para_sora_relay
+                    .run()
+                    .instrument(tracing::info_span!("para_sora_relay", id = i)),
+            );
         }
         while let Some(res) = set.join_next().await {
             res??;

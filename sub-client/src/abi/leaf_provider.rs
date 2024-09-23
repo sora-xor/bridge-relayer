@@ -66,6 +66,12 @@ impl<T: subxt::Config> crate::UnsignedClient<T> {
         let client = self.at(BlockNumberOrHash::Number(block_number)).await?;
         let digest = client.storage().await?.latest_digest().await?;
         let Some(digest) = digest else {
+            warn!(
+                ?network_id,
+                ?block_number,
+                ?commitment_hash,
+                "Digest is empty"
+            );
             return Err(Error::EmptyDigest);
         };
         let valid_items = digest
@@ -78,6 +84,13 @@ impl<T: subxt::Config> crate::UnsignedClient<T> {
             })
             .count();
         if valid_items != 1 {
+            warn!(
+                ?network_id,
+                ?block_number,
+                ?commitment_hash,
+                ?digest,
+                "Digest not found"
+            );
             return Err(Error::DigestNotFound);
         }
         Ok(digest)

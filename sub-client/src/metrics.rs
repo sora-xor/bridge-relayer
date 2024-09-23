@@ -28,54 +28,39 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use codec::{Decode, Encode};
-use scale_decode::DecodeAsType;
-use scale_encode::EncodeAsType;
+use metrics::Label;
+use subxt::backend::rpc::RpcClientT;
 
-use crate::{tx::SignedTx, types::PalletInfo, SubResult};
+pub const SUB_TOTAL_RPC_REQUESTS: &str = "sub_total_rpc_requests";
+pub const SUB_TOTAL_SUBSCRIPTIONS: &str = "sub_total_subscriptions";
 
-#[derive(Clone, Encode, Decode, PartialEq, Eq, EncodeAsType, DecodeAsType)]
-pub struct KillPrefix {
-    prefix: Vec<u8>,
-    subkeys: u32,
+pub fn describe_metrics() {
+    metrics::describe_counter!(SUB_TOTAL_RPC_REQUESTS, "Total Substrate RPC requests");
+
+    metrics::describe_counter!(SUB_TOTAL_SUBSCRIPTIONS, "Total Substrate RPC subscriptions");
 }
 
-impl core::fmt::Debug for KillPrefix {
-    fn fmt(
-        &self,
-        f: &mut scale_info::prelude::fmt::Formatter<'_>,
-    ) -> scale_info::prelude::fmt::Result {
-        f.debug_struct("KillPrefix")
-            .field(
-                "prefix",
-                &sp_core::hexdisplay::HexDisplay::from(&self.prefix),
-            )
-            .field("subkeys", &self.subkeys)
-            .finish()
+pub struct RpcClientMetrics(pub jsonrpsee::core::client::Client, pub Vec<Label>);
+
+impl RpcClientT for RpcClientMetrics {
+    fn request_raw<'a>(
+        &'a self,
+        method: &'a str,
+        params: Option<Box<jsonrpsee::core::JsonRawValue>>,
+    ) -> subxt::backend::rpc::RawRpcFuture<'a, Box<jsonrpsee::core::JsonRawValue>> {
+        let counter = metrics::counter!(SUB_TOTAL_RPC_REQUESTS, self.1.clone());
+        counter.increment(1);
+        self.0.request_raw(method, params)
     }
-}
 
-const PALLET: PalletInfo = PalletInfo::new("System");
-
-const KILL_PREFIX_CALL: SignedTx<KillPrefix> = SignedTx::new(PALLET, "kill_prefix");
-
-#[async_trait::async_trait]
-pub trait SystemTx<T: subxt::Config> {
-    async fn kill_prefix(&self, prefix: Vec<u8>, subkeys: u32) -> SubResult<()>;
-}
-
-#[async_trait::async_trait]
-impl<T, P> SystemTx<T> for crate::tx::SignedTxs<T, P>
-where
-    T: subxt::Config<ExtrinsicParams = subxt::config::DefaultExtrinsicParams<T>>,
-    P: sp_core::Pair + Send + Sync + Clone,
-    T::Signature: From<P::Signature> + Send + Sync,
-    T::AccountId: From<sp_runtime::AccountId32> + Send + Sync,
-    T::AssetId: Send + Sync,
-{
-    async fn kill_prefix(&self, prefix: Vec<u8>, subkeys: u32) -> SubResult<()> {
-        KILL_PREFIX_CALL
-            .submit_sudo(self, KillPrefix { prefix, subkeys })
-            .await
+    fn subscribe_raw<'a>(
+        &'a self,
+        sub: &'a str,
+        params: Option<Box<jsonrpsee::core::JsonRawValue>>,
+        unsub: &'a str,
+    ) -> subxt::backend::rpc::RawRpcFuture<'a, subxt::backend::rpc::RawRpcSubscription> {
+        let counter = metrics::counter!(SUB_TOTAL_SUBSCRIPTIONS, self.1.clone());
+        counter.increment(1);
+        self.0.subscribe_raw(sub, params, unsub)
     }
 }

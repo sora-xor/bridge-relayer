@@ -29,7 +29,9 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 pub mod clear;
+pub mod clear_para;
 pub mod evm;
+pub mod para;
 pub mod ton;
 
 use crate::cli::prelude::*;
@@ -41,8 +43,12 @@ pub(crate) enum Commands {
     Ton(ton::Command),
     /// Run several EVM relayers
     Evm(evm::Command),
+    /// Run several Parachain bridge relayers
+    Para(para::Command),
     /// Clear bridges data
     Clear(clear::Command),
+    /// Clear bridges data
+    ClearParachain(clear_para::Command),
 }
 
 impl Commands {
@@ -50,7 +56,9 @@ impl Commands {
         match self {
             Self::Ton(cmd) => cmd.run().await,
             Self::Evm(cmd) => cmd.run().await,
+            Self::Para(cmd) => cmd.run().await,
             Self::Clear(cmd) => cmd.run().await,
+            Self::ClearParachain(cmd) => cmd.run().await,
         }
     }
 }

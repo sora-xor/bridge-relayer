@@ -125,9 +125,9 @@ where
         if self.is_supported(txs) {
             let nonce = txs.client().nonce().await?;
             tracing::Span::current().record("nonce", nonce);
-            let progress = txs
+            let xt = txs
                 .txs
-                .sign_and_submit_then_watch(
+                .create_signed(
                     &self.payload(call_data),
                     txs.client().signer(),
                     subxt::config::DefaultExtrinsicParamsBuilder::new()
@@ -135,6 +135,11 @@ where
                         .build(),
                 )
                 .await?;
+            trace!(
+                "Extrinsic payload: {:?}",
+                sp_core::hexdisplay::HexDisplay::from(&xt.encoded())
+            );
+            let progress = xt.submit_and_watch().await?;
             txs.client().wait_for_success(progress).await
         } else {
             Err(Error::NotSupported(format!("{:?}", self)))
@@ -155,13 +160,13 @@ where
         T::AssetId: Send + Sync,
     {
         debug!("Call data: {call_data:?}");
-        if self.is_supported(txs) || txs.is_supported(SudoCall::<()>::PALLET, SudoCall::<()>::CALL)
+        if self.is_supported(txs) && txs.is_supported(SudoCall::<()>::PALLET, SudoCall::<()>::CALL)
         {
             let nonce = txs.client().nonce().await?;
             tracing::Span::current().record("nonce", nonce);
-            let progress = txs
+            let xt = txs
                 .txs
-                .sign_and_submit_then_watch(
+                .create_signed(
                     &SudoCall(self.payload(call_data)),
                     txs.client().signer(),
                     subxt::config::DefaultExtrinsicParamsBuilder::new()
@@ -169,6 +174,11 @@ where
                         .build(),
                 )
                 .await?;
+            trace!(
+                "Extrinsic payload: {:?}",
+                sp_core::hexdisplay::HexDisplay::from(&xt.encoded())
+            );
+            let progress = xt.submit_and_watch().await?;
             txs.client().wait_for_success(progress).await
         } else {
             Err(Error::NotSupported(format!("{:?}", self)))

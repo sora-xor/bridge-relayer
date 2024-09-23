@@ -35,6 +35,7 @@ pub mod abi;
 pub mod config;
 pub mod constant;
 pub mod error;
+pub mod metrics;
 pub mod signer;
 pub mod storage;
 pub mod tx;
@@ -43,7 +44,10 @@ pub mod unsigned_tx;
 
 pub type BlockNumberOf<T> = <<T as subxt::Config>::Header as subxt::config::Header>::Number;
 
+use ::metrics::Label;
 use async_lock::RwLock;
+use jsonrpsee::client_transport::ws::WsTransportClientBuilder;
+use metrics::RpcClientMetrics;
 use std::{collections::BTreeMap, sync::Arc};
 
 pub use crate::error::{Error, SubResult};
@@ -69,6 +73,7 @@ pub struct Client<T: subxt::Config, S> {
     signer: S,
     nonce: Arc<RwLock<Option<u64>>>,
     at: Option<T::Hash>,
+    labels: Vec<Label>,
 }
 
 impl<T: subxt::Config, S: Clone> Clone for Client<T, S> {
@@ -80,6 +85,7 @@ impl<T: subxt::Config, S: Clone> Clone for Client<T, S> {
             signer: self.signer.clone(),
             at: self.at,
             nonce: self.nonce.clone(),
+            labels: self.labels.clone(),
         }
     }
 }
@@ -89,8 +95,14 @@ pub type SignedClient<T, P> = Client<T, signer::Signed<P>>;
 pub type UnsignedClient<T> = Client<T, signer::Unsigned>;
 
 impl<T: subxt::Config> UnsignedClient<T> {
-    pub async fn from_url(url: &str) -> SubResult<Self> {
-        let rpc = subxt::backend::rpc::RpcClient::from_url(url).await?;
+    pub async fn from_url(url: &str, labels: Vec<Label>) -> SubResult<Self> {
+        let (sender, receiver) = WsTransportClientBuilder::default()
+            .build(url.parse()?)
+            .await?;
+        let rpc = jsonrpsee::core::client::Client::builder()
+            .max_buffer_capacity_per_subscription(4096)
+            .build_with_tokio(sender, receiver);
+        let rpc = subxt::backend::rpc::RpcClient::new(RpcClientMetrics(rpc, labels.clone()));
         let client = subxt::OnlineClient::from_rpc_client(rpc.clone()).await?;
         Ok(Self {
             inner: client,
@@ -99,7 +111,17 @@ impl<T: subxt::Config> UnsignedClient<T> {
             metadata: Default::default(),
             at: None,
             nonce: Default::default(),
+            labels,
         })
+    }
+
+    pub fn labels(&self) -> Vec<Label> {
+        self.labels.clone()
+    }
+
+    pub fn with_label(mut self, label: Label) -> Self {
+        self.labels.push(label);
+        self
     }
 
     pub async fn follow_runtime_upgrades(&self) -> SubResult<()> {
@@ -118,6 +140,7 @@ impl<T: subxt::Config> UnsignedClient<T> {
             signer: signer::Signed::new(pair),
             at: self.at,
             nonce: self.nonce.clone(),
+            labels: self.labels.clone(),
         }
     }
 }
@@ -135,6 +158,7 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
             signer: signer::Unsigned,
             at: self.at,
             nonce: self.nonce.clone(),
+            labels: self.labels.clone(),
         }
     }
 
@@ -193,9 +217,12 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
                 signer: self.signer.clone(),
                 at: Some(block.hash()),
                 nonce: self.nonce.clone(),
+                labels: self.labels.clone(),
             })
         } else {
-            Ok(self.clone())
+            let mut client = self.clone();
+            client.at = Some(block.hash());
+            Ok(client)
         }
     }
 
@@ -205,27 +232,18 @@ impl<T: subxt::Config, S: Clone + Sync + Send + 'static> Client<T, S> {
     ) -> SubResult<subxt::blocks::BlockRef<T::Hash>> {
         let at = at.into();
         let block_hash = match at {
-            BlockNumberOrHash::Number(n) => {
-                
-                self
-                    .methods()
-                    .chain_get_block_hash(Some(n.into()))
-                    .await?
-                    .ok_or(Error::BlockNotFound(at))?
-            }
+            BlockNumberOrHash::Number(n) => self
+                .methods()
+                .chain_get_block_hash(Some(n.into()))
+                .await?
+                .ok_or(Error::BlockNotFound(at))?,
             BlockNumberOrHash::Hash(h) => T::Hash::decode(&mut &h[..])?,
-            BlockNumberOrHash::Best => {
-                
-                self
-                    .methods()
-                    .chain_get_block_hash(None)
-                    .await?
-                    .ok_or(Error::BlockNotFound(at))?
-            }
-            BlockNumberOrHash::Finalized => {
-                
-                self.methods().chain_get_finalized_head().await?
-            }
+            BlockNumberOrHash::Best => self
+                .methods()
+                .chain_get_block_hash(None)
+                .await?
+                .ok_or(Error::BlockNotFound(at))?,
+            BlockNumberOrHash::Finalized => self.methods().chain_get_finalized_head().await?,
         };
         Ok(block_hash.into())
     }

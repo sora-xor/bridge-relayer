@@ -28,54 +28,20 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use codec::{Decode, Encode};
-use scale_decode::DecodeAsType;
-use scale_encode::EncodeAsType;
+use sub_client::bridge_types::GenericNetworkId;
 
-use crate::{tx::SignedTx, types::PalletInfo, SubResult};
+pub const SUB_INBOUND_NONCE: &str = "sub_inbound_nonce";
+pub const SUB_OUTBOUND_NONCE: &str = "sub_outbound_nonce";
+pub const SUB_CURRENT_NONCE: &str = "sub_current_nonce";
 
-#[derive(Clone, Encode, Decode, PartialEq, Eq, EncodeAsType, DecodeAsType)]
-pub struct KillPrefix {
-    prefix: Vec<u8>,
-    subkeys: u32,
+pub fn describe_metrics() {
+    sub_client::metrics::describe_metrics();
+    metrics::describe_counter!(SUB_INBOUND_NONCE, "Substrate inbound channel nonce");
+    metrics::describe_counter!(SUB_OUTBOUND_NONCE, "Substrate outbound channel nonce");
+    metrics::describe_counter!(SUB_CURRENT_NONCE, "Substrate current nonce in processing");
 }
 
-impl core::fmt::Debug for KillPrefix {
-    fn fmt(
-        &self,
-        f: &mut scale_info::prelude::fmt::Formatter<'_>,
-    ) -> scale_info::prelude::fmt::Result {
-        f.debug_struct("KillPrefix")
-            .field(
-                "prefix",
-                &sp_core::hexdisplay::HexDisplay::from(&self.prefix),
-            )
-            .field("subkeys", &self.subkeys)
-            .finish()
-    }
-}
-
-const PALLET: PalletInfo = PalletInfo::new("System");
-
-const KILL_PREFIX_CALL: SignedTx<KillPrefix> = SignedTx::new(PALLET, "kill_prefix");
-
-#[async_trait::async_trait]
-pub trait SystemTx<T: subxt::Config> {
-    async fn kill_prefix(&self, prefix: Vec<u8>, subkeys: u32) -> SubResult<()>;
-}
-
-#[async_trait::async_trait]
-impl<T, P> SystemTx<T> for crate::tx::SignedTxs<T, P>
-where
-    T: subxt::Config<ExtrinsicParams = subxt::config::DefaultExtrinsicParams<T>>,
-    P: sp_core::Pair + Send + Sync + Clone,
-    T::Signature: From<P::Signature> + Send + Sync,
-    T::AccountId: From<sp_runtime::AccountId32> + Send + Sync,
-    T::AssetId: Send + Sync,
-{
-    async fn kill_prefix(&self, prefix: Vec<u8>, subkeys: u32) -> SubResult<()> {
-        KILL_PREFIX_CALL
-            .submit_sudo(self, KillPrefix { prefix, subkeys })
-            .await
-    }
+pub fn network_metrics_label(network_id: GenericNetworkId) -> metrics::Label {
+    let network_id = format!("{:?}", network_id);
+    metrics::Label::new("network_id", network_id)
 }
