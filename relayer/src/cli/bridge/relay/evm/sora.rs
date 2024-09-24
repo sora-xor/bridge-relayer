@@ -30,15 +30,17 @@
 
 use std::time::Duration;
 
+use sub_client::bridge_types::GenericNetworkId;
+
 use crate::cli::prelude::*;
-use crate::relay::evm::evm_messages::SubstrateMessagesRelay;
+use crate::relay::evm::multisig::evm_sub::SubstrateMessagesRelay;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
     /// Signer for bridge messages
     #[clap(long)]
     signer: String,
@@ -49,16 +51,14 @@ impl Command {
         let eth = self.eth.get_unsigned_evm().await?;
         let sub = self.sub.get_unsigned_substrate().await?;
         let signer = sp_core::ecdsa::Pair::from_string(&self.signer, None)?;
-        let chain_id = eth.chainid().await?;
+        let chain_id = eth.chain_id().await?;
+        let network_id = GenericNetworkId::EVM(chain_id.0.into());
         debug!("Eth chain id = {}", chain_id);
         loop {
             let has_channel = sub
-                .storage_fetch(
-                    &runtime::storage()
-                        .bridge_inbound_channel()
-                        .evm_channel_addresses(&chain_id),
-                    (),
-                )
+                .storage()
+                .await?
+                .evm_channel_address(network_id)
                 .await?
                 .is_some();
             if has_channel {

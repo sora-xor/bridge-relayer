@@ -31,7 +31,7 @@
 use sp_core::ecdsa;
 
 use crate::cli::prelude::*;
-use crate::relay::multisig_messages::RelayBuilder;
+use crate::relay::sub::multisig::RelayBuilder;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {

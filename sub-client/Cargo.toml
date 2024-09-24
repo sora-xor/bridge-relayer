@@ -1,0 +1,26 @@
+[package]
+name = "sub-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3", features = [
+    "derive",
+    "chain-error",
+] }
+scale-info = { version = "2", default-features = false, features = ["derive"] }
+subxt = { version = "0.37.0" }
+bridge-types = { git = "https://github.com/sora-xor/sora2-common.git", branch = "polkadotsdk_1.1.0" }
+bridge-common = { git = "https://github.com/sora-xor/sora2-common.git", branch = "polkadotsdk_1.1.0" }
+sp-runtime = { git = "https://github.com/sora-xor/polkadot-sdk.git", branch = "polkadot-v1.1.0" }
+sp-core = { git = "https://github.com/sora-xor/polkadot-sdk.git", branch = "polkadot-v1.1.0" }
+scale-decode = "0.13.1"
+scale-encode = "0.7.1"
+thiserror = "1.0.63"
+async-trait = "0.1.81"
+async-lock = "3.4.0"
+derive-where = "1.2.7"
+tracing = "0.1.40"
+metrics = "0.23.0"
+jsonrpsee = { version = "0.22.0", features = ["macros", "client"] }
+url = "2.5.2"

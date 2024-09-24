@@ -29,13 +29,13 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::cli::prelude::*;
-use bridge_types::H160;
+use alloy::primitives::{Address, U256};
 
 #[derive(Args, Clone, Debug)]
 pub(super) struct Command {
     /// Token address
     #[clap(long)]
-    token: H160,
+    token: Address,
     /// Amount of tokens to mint
     #[clap(long, short)]
     amount: u128,
@@ -43,34 +43,20 @@ pub(super) struct Command {
     #[clap(long)]
     dry_run: bool,
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
-        let eth = self.eth.get_signed_evm().await?;
-        let token = ethereum_gen::TestToken::new(self.token, eth.inner());
-        let balance = token.balance_of(eth.address()).call().await?;
-        let name = token.name().call().await?;
-        let symbol = token.symbol().call().await?;
-        info!(
-            "Current token {}({}) balance: {}",
-            name,
-            symbol,
-            balance.as_u128()
-        );
-        let mut call = token.mint(eth.address(), self.amount.into()).legacy();
-        eth.inner()
-            .fill_transaction(&mut call.tx, call.block)
+        let evm = self.eth.get_signed_evm().await?;
+        let contract = evm.signed_token(self.token).await?;
+        let tx_hash = contract
+            .mint(evm.address()?, U256::saturating_from(self.amount))
+            .send()
+            .await?
+            .watch()
             .await?;
-        debug!("Check {:?}", call);
-        call.call().await?;
-        eth.save_gas_price(&call, "mint-test-token").await?;
-        if !self.dry_run {
-            debug!("Send");
-            let tx = call.send().await?.confirmations(3).await?.unwrap();
-            debug!("Tx: {:?}", tx);
-        }
+        info!("Minted {tx_hash}");
         Ok(())
     }
 }

@@ -39,7 +39,7 @@ use clap::*;
 #[derive(Debug, Subcommand)]
 pub(crate) enum Commands {
     /// SORA to EVM relay
-    EVM(evm::Command),
+    Evm(evm::Command),
     /// Relay commands SORA to SORA
     #[clap(subcommand)]
     Sora(sora::Commands),
@@ -54,7 +54,7 @@ pub(crate) enum Commands {
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
-            Commands::EVM(cmd) => cmd.run().await,
+            Commands::Evm(cmd) => cmd.run().await,
             Commands::Sora(cmd) => cmd.run().await,
             Commands::Parachain(cmd) => cmd.run().await,
             Commands::Liberland(cmd) => cmd.run().await,

@@ -4,69 +4,31 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ethereum-gen = { path = "../ethereum-gen" }
-substrate-gen = { path = "../substrate-gen" }
-parachain-gen = { path = "../parachain-gen" }
-liberland-gen = { path = "../liberland-gen" }
-beefy-light-client = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
-bridge-common = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
-bridge-types = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
-leaf-provider-rpc = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
-ethers = { version = "2.0.0", features = ["ws", "rustls"] }
-ethers-core = "=2.0.0"
-common = { git = "https://github.com/sora-xor/sora2-network.git" }
-subxt = { version = "0.25.0" }
+sub-client = { path = "../sub-client" }
+evm-client = { path = "../evm-client" }
+ton-client = { path = "../ton-client" }
+subxt = { version = "0.37.0" }
 tokio = { version = "1.14.0", features = ["full"] }
 url = "2.2.2"
 http = "0.2.6"
 anyhow = "1.0.51"
-jsonrpsee = { version = "0.16.2", features = [
-  "macros",
-  "ws-client",
-  "http-client",
-] }
 clap = { version = "4.4", features = ["derive"] }
 async-trait = "0.1.56"
-rlp = "0.5.2"
-triehash = "0.8.4"
-eth_trie = "0.4.0"
-keccak-hasher = "0.16.0"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 futures = "0.3.17"
-ethash = { git = "https://github.com/sora-xor/ethash.git", branch = "sora-v1.6.0" }
-log = "0.4.14"
-env_logger = "0.9.0"
-sha3 = "0.10"
-sha2 = "0.10"
-sha1 = "0.10"
-ethereum-types = { version = "0.14.0", features = ["serialize"] }
 rayon = "1.5.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sp-beefy = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
-beefy-merkle-tree = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
-pallet-beefy-mmr = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
-mmr-rpc = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
-sp-mmr-primitives = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
-beefy-gadget-rpc = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
-sp-core = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
-sp-runtime = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 codec = { package = "parity-scale-codec", version = "3", features = [
   "derive",
   "chain-error",
 ] }
 thiserror = "1.0.30"
 lru = "0.12"
-k256 = "0.13.1"
-assets-rpc = { git = "https://github.com/sora-xor/sora2-network.git" }
-assets-runtime-api = { git = "https://github.com/sora-xor/sora2-network.git" }
 rand = "0.8.5"
 mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2" }
 substrate-bip39 = "=0.4.5"
-secp256k1 = { version = "0.7", features = [
-  'hmac',
-], default-features = false, package = "libsecp256k1" }
 either = "1.11.0"
 reqwest = "=0.11.22"
 serde_with = { version = "3.9.0", features = ["hex", "base64"] }
@@ -75,3 +37,7 @@ lazy_static = "1.5.0"
 chrono = "0.4.38"
 num-bigint = "0.4.6"
 base64 = "0.22.1"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+metrics = "0.23.0"
+metrics-exporter-prometheus = "0.15.3"

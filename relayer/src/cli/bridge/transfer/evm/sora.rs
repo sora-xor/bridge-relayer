@@ -30,21 +30,24 @@
 
 use sp_core::H160;
 use sp_runtime::AccountId32;
+use sub_client::{
+    abi::evm_app::EvmAppStorage,
+    bridge_types::{EVMChainId, MainnetAssetId},
+};
 
 use crate::cli::prelude::*;
-use crate::substrate::AssetId;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
     /// Signer for bridge messages
     #[clap(long)]
     account_id: AccountId32,
     #[clap(long)]
-    asset_id: AssetId,
+    asset_id: MainnetAssetId,
     #[clap(long)]
     amount: u128,
 }
@@ -53,59 +56,47 @@ impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_signed_evm().await?;
         let sub = self.sub.get_unsigned_substrate().await?;
-        let chain_id = eth.chainid().await?;
+        let chain_id: EVMChainId = eth.chain_id().await?.0.into();
         debug!("Eth chain id = {}", chain_id);
         let Some(_channel_address) = sub
-            .storage_fetch(
-                &runtime::storage()
-                    .bridge_inbound_channel()
-                    .evm_channel_addresses(chain_id),
-                (),
-            )
+            .storage()
+            .await?
+            .evm_channel_address(chain_id.into())
             .await?
         else {
             return Err(anyhow!("Bridge channel not registered"));
         };
-        let Some(app_address) = sub
-            .storage_fetch(
-                &runtime::storage()
-                    .evm_fungible_app()
-                    .app_addresses(chain_id),
-                (),
-            )
-            .await?
-        else {
+        let Some(app_address) = sub.storage().await?.app_address(chain_id).await? else {
             return Err(anyhow!("Bridge app not registered"));
         };
         let Some(asset_address) = sub
-            .storage_fetch(
-                &runtime::storage()
-                    .evm_fungible_app()
-                    .token_addresses(chain_id, self.asset_id),
-                (),
-            )
+            .storage()
+            .await?
+            .address_by_asset(chain_id, self.asset_id)
             .await?
         else {
             return Err(anyhow!("Asset not registered"));
         };
-        let app = ethereum_gen::fa_app::FAApp::new(app_address, eth.inner());
+        let app = eth.signed_fungible_app(app_address.0.into()).await?;
         let amount = if asset_address == H160::zero() {
             0
         } else {
             self.amount
         };
-        let mut call: ethers::contract::ContractCall<_, _> =
-            app.lock(asset_address, self.account_id.clone().into(), amount.into());
-        if asset_address == H160::zero() {
-            call = call.value(self.amount);
-        }
+        let call = app
+            .lock(
+                asset_address.0.into(),
+                alloy::primitives::B256::new(*self.account_id.as_ref()),
+                alloy::primitives::U256::from(amount),
+            )
+            .with_cloned_provider();
         info!("Static call");
         call.call().await?;
         info!("Submit transaction");
-        let tx = call.send().await?;
-        info!("Wait for confirmations: {:?}", tx);
-        let tx = tx.confirmations(1).await?;
-        info!("Result: {:?}", tx);
+        let pending = call.send().await?;
+        info!("Wait for confirmations: {:?}", pending);
+        let receipt = pending.get_receipt().await?;
+        info!("Result: {:?}", receipt);
         Ok(())
     }
 }

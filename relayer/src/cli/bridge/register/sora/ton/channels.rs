@@ -31,6 +31,7 @@
 use crate::cli::prelude::*;
 use bridge_types::ton::TonAddress;
 use sp_core::crypto::Ss58Codec;
+use sub_client::abi::channel::ChannelSignedTx;
 use toner::ton::MsgAddress;
 
 #[derive(Args, Clone, Debug)]
@@ -67,46 +68,21 @@ impl Command {
             )?;
 
         let is_channel_registered = sub
-            .storage_fetch(
-                &mainnet_runtime::storage()
-                    .bridge_inbound_channel()
-                    .ton_channel_addresses(&network_id),
-                (),
-            )
+            .storage()
+            .await?
+            .ton_channel_address(network_id.into())
             .await?
             .is_some();
         if !is_channel_registered {
-            let call = runtime::runtime_types::framenode_runtime::RuntimeCall::BridgeInboundChannel(
-                runtime::runtime_types::bridge_channel::inbound::pallet::Call::register_ton_channel {
-                    network_id,
-                    channel_address: TonAddress::new(self.channel.workchain_id as i8, self.channel.address.into()),
-                },
-            );
-            info!("Sudo call extrinsic: {:?}", call);
-            sub.submit_extrinsic(&runtime::tx().sudo().sudo(call))
-                .await?;
+            let tx = sub.tx().await?;
+            tx.register_ton_channel(
+                network_id.into(),
+                TonAddress::new(self.channel.workchain_id as i8, self.channel.address.into()),
+            )
+            .await?;
 
-            let network_id = bridge_types::GenericNetworkId::TON(network_id);
-            let call = mainnet_runtime::runtime_types::framenode_runtime::RuntimeCall::BridgeDataSigner(
-            mainnet_runtime::runtime_types::bridge_data_signer::pallet::Call::register_network {
-                network_id,
-                peers: peers.clone(),
-            },
-        );
-            info!("Submit sudo call: {call:?}");
-            let call = mainnet_runtime::tx().sudo().sudo(call);
-            sub.submit_extrinsic(&call).await?;
-
-            let call =
-                mainnet_runtime::runtime_types::framenode_runtime::RuntimeCall::MultisigVerifier(
-                    mainnet_runtime::runtime_types::multisig_verifier::pallet::Call::initialize {
-                        network_id,
-                        peers,
-                    },
-                );
-            info!("Submit sudo call: {call:?}");
-            let call = mainnet_runtime::tx().sudo().sudo(call);
-            sub.submit_extrinsic(&call).await?;
+            tx.register_signer(network_id.into(), peers.clone()).await?;
+            tx.register_verifier(network_id.into(), peers).await?;
         } else {
             info!("Channel already registered");
         }

@@ -28,16 +28,19 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::{cli::prelude::*, substrate::AssetId};
+use crate::cli::prelude::*;
 use bridge_types::{EVMChainId, H160};
-use common::ETH;
+use sub_client::{
+    abi::evm_app::{EvmAppStorage, EvmAppTx},
+    bridge_types::MainnetAssetId,
+};
 
 #[derive(Args, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
     #[clap(subcommand)]
     apps: Apps,
 }
@@ -45,106 +48,97 @@ pub(crate) struct Command {
 #[derive(Subcommand, Debug)]
 pub(crate) enum Apps {
     /// Register ERC20App
-    FungibleNew {
+    New {
         /// ERC20App contract address
         #[clap(long)]
         contract: H160,
         #[clap(long)]
-        name: common::AssetName,
+        name: String,
         #[clap(long)]
-        symbol: common::AssetSymbol,
+        symbol: String,
         #[clap(long)]
         precision: u8,
     },
     /// Register EthApp with predefined ETH asset id
-    FungiblePredefined {
+    Predefined {
         /// EthApp contract address
         #[clap(long)]
         contract: H160,
     },
     /// Register EthApp with predefined ETH asset id
-    FungibleExisting {
+    Existing {
         /// EthApp contract address
         #[clap(long)]
         contract: H160,
         /// AssetId
         #[clap(long)]
-        asset_id: AssetId,
+        asset_id: MainnetAssetId,
         /// ETH precision
         #[clap(long)]
         precision: u8,
     },
 }
 
+pub const ETH: [u8; 32] =
+    hex_literal::hex!("0200070000000000000000000000000000000000000000000000000000000000");
+
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_unsigned_evm().await?;
         let sub = self.sub.get_signed_substrate().await?;
-        let network_id = eth.chainid().await?;
-        if self.check_if_registered(&sub, network_id).await? {
+        let network_id: EVMChainId = eth.chain_id().await?.0.into();
+        let tx = sub.tx().await?;
+        if self
+            .check_if_registered(&sub.storage().await?, network_id)
+            .await?
+        {
             return Ok(());
         }
-        let call = match &self.apps {
-            Apps::FungibleNew {
+
+        match &self.apps {
+            Apps::New {
                 contract,
                 name,
                 symbol,
                 precision,
-            } => runtime::runtime_types::framenode_runtime::RuntimeCall::EVMFungibleApp(
-                runtime::runtime_types::evm_fungible_app::pallet::Call::register_network {
+            } => {
+                tx.register_network(
                     network_id,
-                    contract: *contract,
-                    name: name.clone(),
-                    symbol: symbol.clone(),
-                    sidechain_precision: *precision,
-                },
-            ),
-            Apps::FungiblePredefined {
-                contract,
-            } => runtime::runtime_types::framenode_runtime::RuntimeCall::EVMFungibleApp(
-                runtime::runtime_types::evm_fungible_app::pallet::Call::register_network_with_existing_asset {
-                    network_id,
-                    contract: *contract,
-                    asset_id: ETH.into(),
-                    sidechain_precision: 18,
-                },
-            ),
-            Apps::FungibleExisting {
+                    *contract,
+                    symbol.clone().into_bytes(),
+                    name.clone().into_bytes(),
+                    *precision,
+                )
+                .await?
+            }
+            Apps::Predefined { contract } => {
+                tx.register_network_with_existing_asset(network_id, *contract, ETH.into(), 18)
+                    .await?
+            }
+            Apps::Existing {
                 contract,
                 asset_id,
-                precision
-            } => runtime::runtime_types::framenode_runtime::RuntimeCall::EVMFungibleApp(
-                runtime::runtime_types::evm_fungible_app::pallet::Call::register_network_with_existing_asset {
-                    network_id,
-                    contract: *contract,
-                    asset_id: *asset_id,
-                    sidechain_precision: *precision,
-                },
-            ),
+                precision,
+            } => {
+                tx.register_network_with_existing_asset(
+                    network_id, *contract, *asset_id, *precision,
+                )
+                .await?
+            }
         };
-        info!("Sudo call extrinsic: {:?}", call);
-        sub.submit_extrinsic(&runtime::tx().sudo().sudo(call))
-            .await?;
         Ok(())
     }
 
     async fn check_if_registered(
         &self,
-        sub: &SubSignedClient<MainnetConfig>,
+        sub: &SubStorage<SoraConfig>,
         network_id: EVMChainId,
     ) -> AnyResult<bool> {
         let (contract, registered) = match self.apps {
-            Apps::FungibleNew { contract, .. }
-            | Apps::FungibleExisting { contract, .. }
-            | Apps::FungiblePredefined { contract, .. } => {
-                let registered = sub
-                    .storage_fetch(
-                        &mainnet_runtime::storage()
-                            .evm_fungible_app()
-                            .app_addresses(&network_id),
-                        (),
-                    )
-                    .await?;
+            Apps::New { contract, .. }
+            | Apps::Existing { contract, .. }
+            | Apps::Predefined { contract, .. } => {
+                let registered = sub.app_address(network_id).await?;
                 (contract, registered)
             }
         };

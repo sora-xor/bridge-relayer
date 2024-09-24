@@ -28,6 +28,8 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use sub_client::bridge_types::GenericNetworkId;
+
 use crate::cli::prelude::*;
 use std::time::Duration;
 
@@ -36,7 +38,7 @@ pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
     /// Signer for bridge messages
     #[clap(long)]
     signer: Option<String>,
@@ -51,24 +53,18 @@ impl Command {
         } else {
             None
         };
-        let network_id = either::for_both!(&eth, e => e.chainid().await.context("fetch chain id")?);
-        let channel_address = loop {
-            let channel_address = sub
-                .storage_fetch(
-                    &runtime::storage()
-                        .bridge_inbound_channel()
-                        .evm_channel_addresses(&network_id),
-                    (),
-                )
-                .await?;
+        let chain_id = eth.chain_id().await?;
+        let network_id = GenericNetworkId::EVM(chain_id.0.into());
+        let channel = loop {
+            let channel_address = sub.storage().await?.evm_channel_address(network_id).await?;
             if let Some(channel_address) = channel_address {
                 break channel_address;
             }
             debug!("Waiting for bridge to be available");
             tokio::time::sleep(Duration::from_secs(10)).await;
         };
-        let messages_relay = crate::relay::evm::sub_messages::RelayBuilder::new()
-            .with_channel_contract(channel_address)
+        let messages_relay = crate::relay::evm::multisig::sub_evm::RelayBuilder::new()
+            .with_channel_contract(channel.0.into())
             .with_receiver_client(eth)
             .with_sender_client(sub)
             .with_signer(signer)

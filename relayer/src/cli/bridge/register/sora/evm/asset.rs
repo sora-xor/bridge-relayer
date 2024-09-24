@@ -30,15 +30,17 @@
 
 use crate::cli::prelude::*;
 use bridge_types::{EVMChainId, H160};
-use common::{AssetId32, AssetName, AssetSymbol, PredefinedAssetId};
-use std::str::FromStr;
+use sub_client::{
+    abi::evm_app::{EvmAppStorage, EvmAppTx},
+    bridge_types::MainnetAssetId,
+};
 
 #[derive(Args, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
     sub: SubstrateClient,
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
     #[clap(subcommand)]
     asset_kind: AssetKind,
 }
@@ -49,7 +51,7 @@ pub(crate) enum AssetKind {
     ExistingERC20 {
         /// ERC20 asset id
         #[clap(long)]
-        asset_id: AssetId32<PredefinedAssetId>,
+        asset_id: MainnetAssetId,
         /// ERC20 token address
         #[clap(long)]
         address: H160,
@@ -76,7 +78,7 @@ pub(crate) enum AssetKind {
     Native {
         /// Native asset id
         #[clap(long)]
-        asset_id: AssetId32<PredefinedAssetId>,
+        asset_id: MainnetAssetId,
     },
 }
 
@@ -84,76 +86,54 @@ impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_unsigned_evm().await?;
         let sub = self.sub.get_signed_substrate().await?;
-        let network_id = eth.chainid().await?;
-        if self.check_if_registered(&sub, network_id).await? {
+        let network_id: EVMChainId = eth.chain_id().await?.0.into();
+        if self
+            .check_if_registered(&sub.storage().await?, network_id)
+            .await?
+        {
             return Ok(());
         }
-        let call = match &self.asset_kind {
+        let tx = sub.tx().await?;
+        match &self.asset_kind {
             AssetKind::ExistingERC20 {
                 asset_id,
                 address,
                 decimals,
-            } => runtime::runtime_types::evm_fungible_app::pallet::Call::register_existing_sidechain_asset {
-                network_id,
-                asset_id: asset_id.clone(),
-                address: *address,
-                decimals: *decimals,
-            },
+            } => {
+                tx.register_existing_asset(network_id, *address, *asset_id, *decimals)
+                    .await?
+            }
             AssetKind::ERC20 {
                 address,
                 name,
                 symbol,
                 decimals,
-            } => runtime::runtime_types::evm_fungible_app::pallet::Call::register_sidechain_asset {
-                network_id,
-                address: address.clone(),
-                name: AssetName::from_str(name.as_str()).unwrap(),
-                symbol: AssetSymbol::from_str(symbol.as_str()).unwrap(),
-                decimals: *decimals,
-            },
-            AssetKind::Native { asset_id } => {
-                runtime::runtime_types::evm_fungible_app::pallet::Call::register_thischain_asset {
+            } => {
+                tx.register_asset(
                     network_id,
-                    asset_id: asset_id.clone(),
-                }
+                    *address,
+                    symbol.clone().into_bytes(),
+                    name.clone().into_bytes(),
+                    *decimals,
+                )
+                .await?
             }
+            AssetKind::Native { asset_id } => tx.register_sora_asset(network_id, *asset_id).await?,
         };
-        let call = runtime::runtime_types::framenode_runtime::RuntimeCall::EVMFungibleApp(call);
-        info!("Sudo call extrinsic: {:?}", call);
-        sub.submit_extrinsic(&runtime::tx().sudo().sudo(call))
-            .await?;
         Ok(())
     }
 
     pub async fn check_if_registered(
         &self,
-        sub: &SubSignedClient<MainnetConfig>,
+        sub: &SubStorage<SoraConfig>,
         network_id: EVMChainId,
     ) -> AnyResult<bool> {
         let is_registered = match &self.asset_kind {
             AssetKind::ExistingERC20 { asset_id, .. } | AssetKind::Native { asset_id } => {
-                let is_registered = sub
-                    .storage_fetch(
-                        &mainnet_runtime::storage()
-                            .evm_fungible_app()
-                            .asset_kinds(&network_id, asset_id),
-                        (),
-                    )
-                    .await?
-                    .is_some();
-                is_registered
+                sub.asset_kind(network_id, *asset_id).await?.is_some()
             }
             AssetKind::ERC20 { address, .. } => {
-                let is_registered = sub
-                    .storage_fetch(
-                        &mainnet_runtime::storage()
-                            .evm_fungible_app()
-                            .assets_by_addresses(&network_id, address),
-                        (),
-                    )
-                    .await?
-                    .is_some();
-                is_registered
+                sub.asset_by_address(network_id, *address).await?.is_some()
             }
         };
         if is_registered {

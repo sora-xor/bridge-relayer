@@ -47,34 +47,17 @@ impl Command {
 
         let peers = self.peers.ecdsa_keys()?;
 
-        let network_id = sub
-            .constant_fetch_or_default(
-                &mainnet_runtime::constants()
-                    .bridge_inbound_channel()
-                    .this_network_id(),
-            )
-            .context("Fetch this network id")?;
+        let network_id = sub.constants().network_id().await?;
 
-        let call = parachain_runtime::runtime_types::sora2_parachain_runtime::RuntimeCall::BridgeDataSigner(
-            parachain_runtime::runtime_types::bridge_data_signer::pallet::Call::register_network {
-                network_id,
-                peers: peers.clone(),
-            },
-        );
-        info!("Submit sudo call: {call:?}");
-        let call = parachain_runtime::tx().sudo().sudo(call);
-        para.submit_extrinsic(&call).await?;
+        para.tx()
+            .await?
+            .register_signer(network_id, peers.clone())
+            .await?;
 
-        let call =
-            parachain_runtime::runtime_types::sora2_parachain_runtime::RuntimeCall::MultisigVerifier(
-                parachain_runtime::runtime_types::multisig_verifier::pallet::Call::initialize {
-                    network_id,
-                    peers,
-                },
-            );
-        info!("Submit sudo call: {call:?}");
-        let call = parachain_runtime::tx().sudo().sudo(call);
-        para.submit_extrinsic(&call).await?;
+        para.tx()
+            .await?
+            .register_verifier(network_id, peers.clone())
+            .await?;
 
         Ok(())
     }

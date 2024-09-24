@@ -41,7 +41,7 @@ use clap::*;
 pub(crate) enum Commands {
     /// Register EVM contracts in SORA network
     #[clap(subcommand)]
-    EVM(evm::Commands),
+    Evm(evm::Commands),
     /// Register parachain in SORA network
     #[clap(subcommand)]
     Parachain(parachain::Commands),
@@ -53,17 +53,17 @@ pub(crate) enum Commands {
     Liberland(liberland::Commands),
     /// Register TON contracts in SORA network
     #[clap(subcommand)]
-    TON(ton::Commands),
+    Ton(ton::Commands),
 }
 
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
-            Commands::EVM(cmd) => cmd.run().await,
+            Commands::Evm(cmd) => cmd.run().await,
             Commands::Parachain(cmd) => cmd.run().await,
             Commands::Sora(cmd) => cmd.run().await,
             Commands::Liberland(cmd) => cmd.run().await,
-            Commands::TON(cmd) => cmd.run().await,
+            Commands::Ton(cmd) => cmd.run().await,
         }
     }
 }

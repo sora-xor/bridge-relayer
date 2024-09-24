@@ -29,14 +29,11 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod bridge;
-mod copy_liquidity;
 mod error;
 mod mint_test_token;
-mod old_bridge;
-mod subscribe_beefy;
 pub mod utils;
 
-use std::path::PathBuf;
+use std::{net::SocketAddr, path::PathBuf};
 
 pub use utils::*;
 
@@ -52,7 +49,9 @@ pub struct Cli {
     #[clap(flatten)]
     para: ParachainClient,
     #[clap(flatten)]
-    eth: EvmClient,
+    eth: EvmClientCli,
+    #[clap(flatten)]
+    ton: TonClientCli,
     /// Substrate account derive URI
     #[clap(long, global = true)]
     substrate_key: Option<String>,
@@ -104,39 +103,44 @@ pub struct Cli {
     /// Path for gas estimations
     #[clap(long, global = true)]
     gas_metrics_path: Option<PathBuf>,
+    /// Enable Prometheus metrics
+    #[clap(long, global = true)]
+    enable_metrics: bool,
+    /// Prometheus endpoint address
+    #[clap(long, global = true)]
+    prometheus_address: Option<SocketAddr>,
     #[clap(subcommand)]
     commands: Commands,
 }
 
 impl Cli {
     pub async fn run(&self) -> AnyResult<()> {
+        if self.enable_metrics {
+            let mut builder = metrics_exporter_prometheus::PrometheusBuilder::new();
+            if let Some(address) = &self.prometheus_address {
+                builder = builder.with_http_listener(*address);
+            }
+            builder.install()?;
+            crate::metrics::describe_metrics();
+        }
         self.commands.run().await
     }
 }
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Subscribe beefy to new commitments
-    SubscribeBeefy(subscribe_beefy::Command),
     /// Mint test token (work for tokens with mint method)
     MintTestToken(mint_test_token::Command),
     /// Operations with bridge
     #[clap(subcommand)]
     Bridge(bridge::Commands),
-    /// Operations with old bridge
-    #[clap(subcommand)]
-    OldBridge(old_bridge::Commands),
-    CopyLiquidity(copy_liquidity::Command),
 }
 
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
-            Self::SubscribeBeefy(cmd) => cmd.run().await,
             Self::MintTestToken(cmd) => cmd.run().await,
             Self::Bridge(cmd) => cmd.run().await,
-            Self::OldBridge(cmd) => cmd.run().await,
-            Self::CopyLiquidity(cmd) => cmd.run().await,
         }
     }
 }
@@ -145,5 +149,4 @@ pub mod prelude {
     pub use crate::cli::utils::*;
     pub use crate::prelude::*;
     pub use clap::*;
-    pub use ethers::providers::Middleware;
 }

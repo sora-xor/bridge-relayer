@@ -31,7 +31,6 @@
 use sp_core::ecdsa;
 
 use crate::cli::prelude::*;
-use crate::relay::multisig_messages::RelayBuilder;
 
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
@@ -46,7 +45,7 @@ impl Command {
         let receiver = self.para.get_unsigned_substrate().await?;
         let sender = receiver.clone();
         let signer = ecdsa::Pair::from_string(&self.signer, None)?;
-        let messages_relay = RelayBuilder::new()
+        let messages_relay = crate::relay::sub::multisig::RelayBuilder::new()
             .with_sender_client(sender)
             .with_receiver_client(receiver)
             .with_signer(signer)
