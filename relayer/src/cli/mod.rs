@@ -85,9 +85,9 @@ pub struct Cli {
     /// File with EVM private key
     #[clap(long, global = true)]
     evm_key_file: Option<String>,
-    /// EVM node endpoint
+    /// EVM node endpoints
     #[clap(long, global = true)]
-    evm_url: Option<Url>,
+    evm_urls: Option<Vec<Url>>,
     /// TON mnemonic
     #[clap(long, global = true)]
     ton_key: Option<String>,

@@ -34,12 +34,16 @@ use thiserror::Error;
 pub enum Error {
     #[error("Transport error: {0}")]
     Transport(#[from] alloy::transports::TransportError),
+    #[error("RPC error: {0}")]
+    Rpc(String),
     #[error("Client is unsigned")]
     UnsignedClient,
     #[error("Block not found")]
     BlockNotFound,
     #[error("Missing block number")]
     MissingBlockNumber,
+    #[error("No available RPC endpoints")]
+    NoEndpoints,
 }
 
 pub type EvmResult<T> = Result<T, Error>;

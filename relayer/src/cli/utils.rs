@@ -33,8 +33,9 @@ use std::path::PathBuf;
 use super::error::*;
 use crate::prelude::*;
 use clap::*;
+use evm_client::alloy::network::EthereumWallet;
 use evm_client::alloy::providers::Provider;
-use evm_client::alloy::signers::Signer;
+use evm_client::alloy::signers::{local::PrivateKeySigner, Signer};
 use metrics::IntoLabels;
 use sub_client::bridge_types::ton::TonNetworkId;
 use sub_client::sp_core::{crypto::Ss58Codec, H160};
@@ -148,7 +149,7 @@ pub struct EvmClientCli {
     #[clap(from_global)]
     evm_key_file: Option<String>,
     #[clap(from_global)]
-    evm_url: Option<Url>,
+    evm_urls: Option<Vec<Url>>,
     #[clap(from_global)]
     gas_metrics_path: Option<PathBuf>,
 }
@@ -163,20 +164,22 @@ impl EvmClientCli {
         }
     }
 
-    pub fn get_url(&self) -> AnyResult<Url> {
-        Ok(self.evm_url.clone().ok_or(CliError::EvmEndpoint)?)
+    pub fn get_urls(&self) -> AnyResult<&[Url]> {
+        self.evm_urls
+            .as_deref()
+            .ok_or_else(|| CliError::EvmEndpoints.into())
     }
 
     pub async fn get_unsigned_evm(&self) -> AnyResult<EvmClient> {
-        Ok(EvmClient::from_url(self.get_url()?.as_ref()).await?)
+        Ok(EvmClient::from_urls(self.get_urls()?).await?)
     }
 
     pub async fn get_signed_evm(&self) -> AnyResult<EvmClient> {
         let client = self.get_unsigned_evm().await?;
-        let mut signer: alloy::signers::local::PrivateKeySigner = self.get_key_string()?.parse()?;
+        let mut signer: PrivateKeySigner = self.get_key_string()?.parse()?;
         let chain_id = client.unsigned_provider().get_chain_id().await?;
         signer.set_chain_id(Some(chain_id));
-        Ok(client.signed(alloy::network::EthereumWallet::new(signer))?)
+        Ok(client.signed(EthereumWallet::new(signer))?)
     }
 
     pub async fn get_evm(&self) -> AnyResult<EvmClient> {
@@ -185,7 +188,7 @@ impl EvmClientCli {
             let mut signer: alloy::signers::local::PrivateKeySigner = key.parse()?;
             let chain_id = client.unsigned_provider().get_chain_id().await?;
             signer.set_chain_id(Some(chain_id));
-            Ok(client.signed(alloy::network::EthereumWallet::new(signer))?)
+            Ok(client.signed(EthereumWallet::new(signer))?)
         } else {
             Ok(client)
         }
