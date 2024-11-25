@@ -34,8 +34,8 @@ use thiserror::Error;
 pub enum CliError {
     #[error("Both file and arg key provided")]
     BothKeyTypesProvided,
-    #[error("Provide evm endpoint via --evm-url")]
-    EvmEndpoint,
+    #[error("Provide evm endpoint via --evm-urls")]
+    EvmEndpoints,
     #[error("Provide evm key via --evm-key or --evm-key-file")]
     EvmKey,
     #[error("Provide substrate endpoint via --substrate-url")]

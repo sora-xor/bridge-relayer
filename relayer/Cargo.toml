@@ -8,15 +8,15 @@ sub-client = { path = "../sub-client" }
 evm-client = { path = "../evm-client" }
 ton-client = { path = "../ton-client" }
 subxt = { version = "0.37.0" }
-tokio = { version = "1.14.0", features = ["full"] }
+tokio = { version = "1.41", features = ["full"] }
 url = "2.2.2"
 http = "0.2.6"
-anyhow = "1.0.51"
-clap = { version = "4.4", features = ["derive"] }
+anyhow = "1.0.93"
+clap = { version = "4.5", features = ["derive"] }
 async-trait = "0.1.56"
 hex = "0.4.3"
 hex-literal = "0.4.1"
-futures = "0.3.17"
+futures = "0.3.31"
 rayon = "1.5.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -24,7 +24,7 @@ codec = { package = "parity-scale-codec", version = "3", features = [
   "derive",
   "chain-error",
 ] }
-thiserror = "1.0.30"
+thiserror = "1.0.69"
 lru = "0.12"
 rand = "0.8.5"
 mmr-lib = { package = "ckb-merkle-mountain-range", version = "0.5.2" }

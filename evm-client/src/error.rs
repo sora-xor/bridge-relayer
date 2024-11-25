@@ -28,18 +28,31 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+use alloy::transports::{RpcError, TransportError};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Transport error: {0}")]
-    Transport(#[from] alloy::transports::TransportError),
+    Transport(TransportError),
+    #[error("RPC error: {0}")]
+    Rpc(String),
     #[error("Client is unsigned")]
     UnsignedClient,
     #[error("Block not found")]
     BlockNotFound,
     #[error("Missing block number")]
     MissingBlockNumber,
+    #[error("No available RPC endpoints")]
+    NoEndpoints,
+    #[error("Connection failed: {0}")]
+    ConnectionFailed(String),
+}
+
+impl<E: std::fmt::Display> From<RpcError<E>> for Error {
+    fn from(e: RpcError<E>) -> Self {
+        Error::Rpc(e.to_string())
+    }
 }
 
 pub type EvmResult<T> = Result<T, Error>;

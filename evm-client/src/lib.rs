@@ -33,16 +33,22 @@ pub mod error;
 
 pub use alloy;
 use alloy::{
+    eips::BlockNumberOrTag,
     network::{Ethereum, EthereumWallet, NetworkWallet},
     primitives::{Address, B256, U256},
     providers::{
         fillers::{ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller},
-        Identity, Provider, RootProvider,
+        Identity, Provider, ProviderBuilder, RootProvider,
     },
-    sol_types::SolValue,
-    transports::BoxTransport,
+    transports::{BoxTransport, TransportError},
 };
 use error::{Error, EvmResult};
+use std::{
+    sync::{Arc, RwLock},
+    thread,
+    time::Duration,
+};
+use url::Url;
 
 pub type UnsignedFiller =
     JoinFill<JoinFill<JoinFill<Identity, GasFiller>, NonceFiller>, ChainIdFiller>;
@@ -58,25 +64,90 @@ pub type SignedProvider = FillProvider<
 >;
 
 #[derive(Clone)]
+pub struct RotatingProvider {
+    urls: Arc<[Url]>,
+    provider: Arc<RwLock<UnsignedProvider>>,
+}
+
+impl RotatingProvider {
+    pub async fn new(urls: &[Url]) -> Result<Self, Error> {
+        let temp_provider = Self::try_connect(&urls[0])
+            .await
+            .expect("temporary provider");
+        let provider = Self {
+            urls: Arc::from(urls),
+            provider: Arc::new(RwLock::new(temp_provider)),
+        };
+        provider.rotate_connection().await?;
+        Ok(provider)
+    }
+
+    async fn try_connect(url: &Url) -> Result<UnsignedProvider, TransportError> {
+        ProviderBuilder::new()
+            .with_recommended_fillers()
+            .on_builtin(url.as_ref())
+            .await
+    }
+
+    async fn rotate_connection(&self) -> Result<(), Error> {
+        let mut idx = 0;
+        let mut first_rotation = true;
+        loop {
+            if idx == 0 && !first_rotation {
+                tracing::debug!("Completed full rotation of RPC endpoints");
+                return Err(Error::ConnectionFailed(
+                    "Failed to connect to any RPC endpoint after full rotation".into(),
+                ));
+            }
+            let url = &self.urls[idx];
+            match Self::try_connect(url).await {
+                Ok(new_provider) => match new_provider.get_chain_id().await {
+                    Ok(_) => {
+                        tracing::debug!("Successfully connected to RPC endpoint: {}", url);
+                        let mut guard = self.provider.write().unwrap();
+                        *guard = new_provider;
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to verify connection to {}: {}", url, e);
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!("Failed to connect to {}: {}", url, e);
+                }
+            }
+            thread::sleep(Duration::from_secs(1));
+            idx = (idx + 1) % self.urls.len();
+            if idx == 0 {
+                first_rotation = false;
+            }
+        }
+    }
+
+    pub fn inner(&self) -> UnsignedProvider {
+        self.provider.read().unwrap().clone()
+    }
+}
+
+#[derive(Clone)]
 pub struct Client {
-    provider: UnsignedProvider,
+    provider: RotatingProvider,
     wallet: Option<EthereumWallet>,
 }
 
 impl Client {
-    pub async fn from_url(url: &str) -> EvmResult<Self> {
-        let provider = alloy::providers::ProviderBuilder::new()
-            .with_recommended_fillers()
-            .on_builtin(url)
-            .await?;
+    pub async fn from_urls(urls: &[Url]) -> EvmResult<Self> {
+        if urls.is_empty() {
+            return Err(Error::NoEndpoints);
+        }
         Ok(Self {
-            provider,
+            provider: RotatingProvider::new(urls).await?,
             wallet: None,
         })
     }
 
     pub fn unsigned_provider(&self) -> UnsignedProvider {
-        self.provider.clone()
+        self.provider.inner()
     }
 
     pub fn unsigned(&self) -> Self {
@@ -88,15 +159,12 @@ impl Client {
 
     pub fn signed_provider(&self) -> EvmResult<SignedProvider> {
         Ok(self
-            .provider
-            .clone()
+            .unsigned_provider()
             .join_with(WalletFiller::new(self.wallet()?)))
     }
 
     pub fn wallet(&self) -> EvmResult<EthereumWallet> {
-        self.wallet
-            .clone()
-            .ok_or(crate::error::Error::UnsignedClient)
+        self.wallet.clone().ok_or(Error::UnsignedClient)
     }
 
     pub fn address(&self) -> EvmResult<Address> {
@@ -106,9 +174,8 @@ impl Client {
     }
 
     pub async fn chain_id(&self) -> EvmResult<B256> {
-        let chain_id = self.provider.get_chain_id().await?;
-        let chain_id = U256::from(chain_id);
-        Ok(chain_id.tokenize().0)
+        let chain_id = self.unsigned_provider().get_chain_id().await?;
+        Ok(B256::from(U256::from(chain_id)))
     }
 
     pub fn signed(&self, wallet: EthereumWallet) -> EvmResult<Self> {
@@ -162,8 +229,8 @@ impl Client {
 
     pub async fn get_finalized_block_number(&self) -> EvmResult<u64> {
         let block = self
-            .provider
-            .get_block_by_number(alloy::eips::BlockNumberOrTag::Finalized, true)
+            .unsigned_provider()
+            .get_block_by_number(BlockNumberOrTag::Finalized, true)
             .await?
             .ok_or(Error::BlockNotFound)?;
         block.header.number.ok_or(Error::MissingBlockNumber)
