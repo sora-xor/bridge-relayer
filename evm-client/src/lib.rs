@@ -50,7 +50,6 @@ use std::{
     task::{Context, Poll},
 };
 use tokio::sync::RwLock;
-use tracing::debug;
 use url::Url;
 
 pub type UnsignedFiller =
@@ -70,7 +69,6 @@ pub type SignedProvider = FillProvider<
 struct TransportState {
     idx: usize,
     attempts: usize,
-    any_success: bool,
 }
 
 #[derive(Clone)]
@@ -88,7 +86,6 @@ impl RotationTransport {
             state: Arc::new(RwLock::new(TransportState {
                 idx: 0,
                 attempts: 1,
-                any_success: false,
             })),
         }
     }
@@ -115,22 +112,25 @@ impl RotationTransport {
         let mut state = self.state.write().await;
         loop {
             let url = &self.urls[state.idx];
-            debug!("Attempting request to {} (attempt {})", url, state.attempts);
+            tracing::debug!("Attempting request to {} (attempt {})", url, state.attempts);
             match self.request(url, &request).await {
                 Ok(response) => {
-                    state.any_success = true;
+                    state.attempts = 1;
                     return Ok(response);
                 }
                 Err(e) => {
-                    debug!(
+                    tracing::debug!(
                         "Request to {} failed (attempt {}): {}",
-                        url, state.attempts, e
+                        url,
+                        state.attempts,
+                        e
                     );
                 }
             }
-            if !state.any_success && state.attempts >= self.urls.len() {
+            if state.attempts >= self.urls.len() {
+                tracing::warn!("Failed to connect to any endpoint");
                 return Err(RpcError::Transport(TransportErrorKind::Custom(
-                    "Failed to connect to any endpoint in first cycle".into(),
+                    "Failed to connect to any endpoint".into(),
                 )));
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -166,14 +166,12 @@ impl EvmClient {
         if urls.is_empty() {
             return Err(Error::NoEndpoints);
         }
-
         let transport = RotationTransport::new(urls);
         let boxed_transport = BoxTransport::new(transport);
         let client = RpcClient::new(boxed_transport, false);
         let provider = ProviderBuilder::new()
             .with_recommended_fillers()
             .on_client(client);
-
         Ok(Self {
             provider,
             wallet: None,

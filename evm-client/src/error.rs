@@ -34,8 +34,6 @@ use thiserror::Error;
 pub enum Error {
     #[error("Transport error: {0}")]
     Transport(#[from] alloy::transports::TransportError),
-    #[error("RPC error: {0}")]
-    Rpc(String),
     #[error("Client is unsigned")]
     UnsignedClient,
     #[error("Block not found")]
