@@ -71,7 +71,7 @@ pub mod prelude {
     pub use either::Either;
     pub use evm_client::alloy;
     pub use evm_client::alloy::primitives as evm_primitives;
-    pub use evm_client::Client as EvmClient;
+    pub use evm_client::EvmClient;
     pub use evm_primitives::Address as EvmAddress;
     pub use hex_literal::hex;
     pub use http::Uri;

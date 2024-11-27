@@ -40,6 +40,8 @@ pub enum Error {
     BlockNotFound,
     #[error("Missing block number")]
     MissingBlockNumber,
+    #[error("No available RPC endpoints")]
+    NoEndpoints,
 }
 
 pub type EvmResult<T> = Result<T, Error>;

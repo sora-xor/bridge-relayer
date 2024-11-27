@@ -37,12 +37,20 @@ use alloy::{
     primitives::{Address, B256, U256},
     providers::{
         fillers::{ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller},
-        Identity, Provider, RootProvider,
+        Identity, Provider, ProviderBuilder, RootProvider,
     },
-    sol_types::SolValue,
-    transports::BoxTransport,
+    rpc::client::RpcClient,
+    transports::{BoxTransport, RpcError, TransportError, TransportErrorKind, TransportFut},
 };
+use alloy_json_rpc::{RequestPacket, ResponsePacket};
 use error::{Error, EvmResult};
+use reqwest::Client as ReqwestClient;
+use std::{
+    sync::Arc,
+    task::{Context, Poll},
+};
+use tokio::sync::RwLock;
+use url::Url;
 
 pub type UnsignedFiller =
     JoinFill<JoinFill<JoinFill<Identity, GasFiller>, NonceFiller>, ChainIdFiller>;
@@ -57,18 +65,113 @@ pub type SignedProvider = FillProvider<
     Ethereum,
 >;
 
+#[derive(Debug)]
+struct TransportState {
+    idx: usize,
+    attempts: usize,
+}
+
 #[derive(Clone)]
-pub struct Client {
+pub struct RotationTransport {
+    urls: Arc<[Url]>,
+    http_client: ReqwestClient,
+    state: Arc<RwLock<TransportState>>,
+}
+
+impl RotationTransport {
+    pub fn new(urls: &[Url]) -> Self {
+        Self {
+            urls: Arc::from(urls),
+            http_client: ReqwestClient::new(),
+            state: Arc::new(RwLock::new(TransportState {
+                idx: 0,
+                attempts: 1,
+            })),
+        }
+    }
+
+    async fn request(&self, url: &Url, request: &RequestPacket) -> Result<ResponsePacket, String> {
+        let response = self
+            .http_client
+            .post(url.clone())
+            .json(request)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !response.status().is_success() {
+            return Err(format!("HTTP error: {}", response.status()));
+        }
+        let body = response.bytes().await.map_err(|e| e.to_string())?;
+        serde_json::from_slice(&body).map_err(|e| e.to_string())
+    }
+
+    async fn request_rotation(
+        &self,
+        request: RequestPacket,
+    ) -> Result<ResponsePacket, RpcError<TransportErrorKind>> {
+        let mut state = self.state.write().await;
+        loop {
+            let url = &self.urls[state.idx];
+            tracing::debug!("Attempting request to {} (attempt {})", url, state.attempts);
+            match self.request(url, &request).await {
+                Ok(response) => {
+                    state.attempts = 1;
+                    return Ok(response);
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "Request to {} failed (attempt {}): {}",
+                        url,
+                        state.attempts,
+                        e
+                    );
+                }
+            }
+            if state.attempts >= self.urls.len() {
+                tracing::warn!("Failed to connect to any endpoint");
+                return Err(RpcError::Transport(TransportErrorKind::Custom(
+                    "Failed to connect to any endpoint".into(),
+                )));
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            state.idx = (state.idx + 1) % self.urls.len();
+            state.attempts += 1;
+        }
+    }
+}
+
+impl tower::Service<RequestPacket> for RotationTransport {
+    type Response = ResponsePacket;
+    type Error = TransportError;
+    type Future = TransportFut<'static>;
+
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, request: RequestPacket) -> Self::Future {
+        let this = self.clone();
+        Box::pin(async move { this.request_rotation(request).await })
+    }
+}
+
+#[derive(Clone)]
+pub struct EvmClient {
     provider: UnsignedProvider,
     wallet: Option<EthereumWallet>,
 }
 
-impl Client {
-    pub async fn from_url(url: &str) -> EvmResult<Self> {
-        let provider = alloy::providers::ProviderBuilder::new()
+impl EvmClient {
+    pub async fn from_urls(urls: &[Url]) -> EvmResult<Self> {
+        if urls.is_empty() {
+            return Err(Error::NoEndpoints);
+        }
+        let transport = RotationTransport::new(urls);
+        let boxed_transport = BoxTransport::new(transport);
+        let client = RpcClient::new(boxed_transport, false);
+        let provider = ProviderBuilder::new()
             .with_recommended_fillers()
-            .on_builtin(url)
-            .await?;
+            .on_client(client);
         Ok(Self {
             provider,
             wallet: None,
@@ -94,9 +197,7 @@ impl Client {
     }
 
     pub fn wallet(&self) -> EvmResult<EthereumWallet> {
-        self.wallet
-            .clone()
-            .ok_or(crate::error::Error::UnsignedClient)
+        self.wallet.clone().ok_or(Error::UnsignedClient)
     }
 
     pub fn address(&self) -> EvmResult<Address> {
@@ -107,8 +208,7 @@ impl Client {
 
     pub async fn chain_id(&self) -> EvmResult<B256> {
         let chain_id = self.provider.get_chain_id().await?;
-        let chain_id = U256::from(chain_id);
-        Ok(chain_id.tokenize().0)
+        Ok(B256::from(U256::from(chain_id)))
     }
 
     pub fn signed(&self, wallet: EthereumWallet) -> EvmResult<Self> {
@@ -162,7 +262,7 @@ impl Client {
 
     pub async fn get_finalized_block_number(&self) -> EvmResult<u64> {
         let block = self
-            .provider
+            .unsigned_provider()
             .get_block_by_number(alloy::eips::BlockNumberOrTag::Finalized, true)
             .await?
             .ok_or(Error::BlockNotFound)?;
