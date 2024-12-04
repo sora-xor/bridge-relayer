@@ -134,18 +134,6 @@ impl TonClient {
         }
     }
 
-    pub async fn get_address_information(
-        &self,
-        address: toner::ton::MsgAddress,
-    ) -> AnyResult<FullAccountState> {
-        trace!("Get address info {address:?}");
-        self.get_request(
-            "getAddressInformation",
-            &[("address".into(), address.to_string())],
-        )
-        .await
-    }
-
     pub async fn get_transactions(
         &self,
         address: toner::ton::MsgAddress,
@@ -207,14 +195,6 @@ pub struct SignedTonClient {
 impl SignedTonClient {
     pub fn new(client: TonClient, wallet: TonWallet) -> Self {
         Self { client, wallet }
-    }
-
-    pub fn client(&self) -> &TonClient {
-        &self.client
-    }
-
-    pub fn wallet(&self) -> &TonWallet {
-        &self.wallet
     }
 
     pub async fn seqno(&self) -> AnyResult<u32> {

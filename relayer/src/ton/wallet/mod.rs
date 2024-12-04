@@ -56,19 +56,6 @@ impl TonWallet {
         }
     }
 
-    pub fn wallet_id(&self) -> u32 {
-        match self {
-            TonWallet::V1R1(w) => w.wallet_id(),
-            TonWallet::V1R2(w) => w.wallet_id(),
-            TonWallet::V1R3(w) => w.wallet_id(),
-            TonWallet::V2R1(w) => w.wallet_id(),
-            TonWallet::V2R2(w) => w.wallet_id(),
-            TonWallet::V3R1(w) => w.wallet_id(),
-            TonWallet::V3R2(w) => w.wallet_id(),
-            TonWallet::V4R1(w) => w.wallet_id(),
-            TonWallet::V4R2(w) => w.wallet_id(),
-        }
-    }
     pub fn create_external_message(
         &self,
         expire_at: DateTime<Utc>,
