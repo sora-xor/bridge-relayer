@@ -150,6 +150,9 @@ impl Relay {
             .await?;
         for tx in res {
             for msg in tx.out_msgs {
+                if msg.source != self.channel || msg.destination.is_some() {
+                    continue;
+                }
                 if let crate::ton::types::MessageData::Raw { body, .. } = msg.msg_data {
                     let body = toner::ton::boc::BagOfCells::unpack(body.as_bits())?
                         .single_root()
@@ -180,7 +183,7 @@ impl Relay {
                             ));
                         }
                         Err(err) => {
-                            println!("Failed to parse body: {err:?}");
+                            log::warn!("Failed to parse body: {err:?}");
                         }
                     }
                 }
