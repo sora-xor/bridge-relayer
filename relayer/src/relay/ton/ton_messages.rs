@@ -196,9 +196,9 @@ impl Relay {
         let sub_nonce = self
             .sub
             .storage_fetch_or_default(
-                &runtime::storage().bridge_inbound_channel().channel_nonces(
-                    &bridge_types::GenericNetworkId::TON(bridge_types::ton::TonNetworkId::Testnet),
-                ),
+                &runtime::storage()
+                    .bridge_inbound_channel()
+                    .channel_nonces(&self.ton_network_id),
                 (),
             )
             .await?;
