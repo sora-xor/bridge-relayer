@@ -3,14 +3,14 @@ name: Cargo fmt & clippy
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [master, develop]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   static_analysis:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       # v4.1.1
@@ -18,18 +18,22 @@ jobs:
         with:
           submodules: 'true'
 
-      # v2.1.0
-      - uses: arduino/setup-protoc@a8b67ba40b37d35169e222f3bb352603327985b6
+      - uses: arduino/setup-protoc@v3
 
+      - name: Clean unused cache
+        run: |
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      
       # v2.7.1
       - uses: Swatinem/rust-cache@3cf7f8cc28d1b4e7d01e3783be10a97d55d483c8
         with:
           # 20GB of cache per repo per week
           cache-provider: "buildjet"
-
-      # v2.20.16
+      
+      # latest v2
       - name: cargo install
-        uses: taiki-e/install-action@ac89944b5b150d78567ab6c02badfbe48b0b55aa
+        uses: taiki-e/install-action@v2
         with:
           tool: clippy-sarif, sarif-fmt
 
@@ -37,8 +41,10 @@ jobs:
         run: cargo fmt --check
 
       - name: cargo clippy
-        run: cargo clippy --all-targets --all-features --message-format=json -- -D warnings |
-          clippy-sarif | tee results.sarif | sarif-fmt
+        env:
+          SKIP_WASM_BUILD: 1
+        run: cargo clippy --all-targets --features private-net,stage,wip,runtime-benchmarks
+          --message-format=json -- -D warnings | clippy-sarif | tee results.sarif | sarif-fmt
         shell: bash
 
       - name: Upload SARIF file
