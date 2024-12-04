@@ -29,6 +29,7 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 mod evm;
+mod ton;
 
 use crate::cli::prelude::*;
 use clap::*;
@@ -38,12 +39,16 @@ pub(crate) enum Commands {
     /// Relay commands from EVM to another networks
     #[clap(subcommand)]
     Evm(evm::Commands),
+    /// Transfer tokens from TON to another networks
+    #[clap(subcommand)]
+    Ton(ton::Commands),
 }
 
 impl Commands {
     pub async fn run(&self) -> AnyResult<()> {
         match self {
             Commands::Evm(cmd) => cmd.run().await,
+            Commands::Ton(cmd) => cmd.run().await,
         }
     }
 }

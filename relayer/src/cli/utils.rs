@@ -32,6 +32,7 @@ use std::path::PathBuf;
 
 use super::error::*;
 use crate::{prelude::*, substrate::traits::KeyPair};
+use bridge_types::ton::TonNetworkId;
 use clap::*;
 use sp_core::{crypto::Ss58Codec, H160};
 
@@ -250,5 +251,58 @@ impl BridgePeers {
                 acc.push(address);
                 Ok(acc)
             })
+    }
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct TonClientCli {
+    #[clap(from_global)]
+    ton_key: Option<String>,
+    #[clap(from_global)]
+    ton_key_file: Option<String>,
+    #[clap(from_global)]
+    ton_url: Option<Url>,
+    #[clap(from_global)]
+    ton_api_key: Option<String>,
+}
+
+impl TonClientCli {
+    pub fn get_key_string(&self) -> AnyResult<String> {
+        match (&self.ton_key, &self.ton_key_file) {
+            (Some(_), Some(_)) => Err(CliError::BothKeyTypesProvided.into()),
+            (None, None) => Err(CliError::TonKey.into()),
+            (Some(key), _) => Ok(key.clone()),
+            (_, Some(key_file)) => Ok(std::fs::read_to_string(key_file)?),
+        }
+    }
+
+    pub fn get_url(&self) -> AnyResult<Url> {
+        Ok(self.ton_url.clone().ok_or(CliError::TonEndpoint)?)
+    }
+
+    pub fn get_unsigned_ton(&self) -> AnyResult<crate::ton::TonClient> {
+        let client = crate::ton::TonClient::new(self.get_url()?, self.ton_api_key.clone())?;
+        Ok(client)
+    }
+
+    pub fn get_signed_ton(&self) -> AnyResult<crate::ton::SignedTonClient> {
+        let client = self.get_unsigned_ton()?;
+        let wallet = crate::ton::wallet::TonWallet::from_key(&self.get_key_string()?)?;
+        Ok(crate::ton::SignedTonClient::new(client, wallet))
+    }
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum TonNetworkSelector {
+    Mainnet,
+    Testnet,
+}
+
+impl TonNetworkSelector {
+    pub fn network(&self) -> TonNetworkId {
+        match self {
+            Self::Mainnet => TonNetworkId::Mainnet,
+            Self::Testnet => TonNetworkId::Testnet,
+        }
     }
 }

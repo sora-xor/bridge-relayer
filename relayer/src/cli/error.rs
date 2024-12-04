@@ -50,4 +50,8 @@ pub enum CliError {
     LiberlandEndpoint,
     #[error("Provide liberland key via --liberland-key or --liberland-key-file")]
     LiberlandKey,
+    #[error("Provide ton endpoint via --ton-url")]
+    TonEndpoint,
+    #[error("Provide ton key via --ton-key or --ton-key-file")]
+    TonKey,
 }

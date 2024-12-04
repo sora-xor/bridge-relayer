@@ -238,6 +238,9 @@ impl SenderConfig for ParachainConfig {
                 unimplemented!("Bridge from parachain to EVM network is supported")
             }
             GenericNetworkId::EVMLegacy(_) => unimplemented!(),
+            GenericNetworkId::TON(_) => {
+                unimplemented!("Bridge from parachain to TON network is supported")
+            }
         }
     }
 
@@ -325,10 +328,10 @@ impl SenderConfig for MainnetConfig {
             GenericNetworkId::Sub(network_id) => mainnet_runtime::storage()
                 .substrate_bridge_outbound_channel()
                 .channel_nonces(network_id),
-            GenericNetworkId::EVM(chain_id) => mainnet_runtime::storage()
-                .bridge_outbound_channel()
-                .channel_nonces(GenericNetworkId::EVM(chain_id)),
             GenericNetworkId::EVMLegacy(_) => unimplemented!(),
+            network_id => mainnet_runtime::storage()
+                .bridge_outbound_channel()
+                .channel_nonces(network_id),
         }
     }
 
@@ -418,6 +421,9 @@ impl SenderConfig for LiberlandConfig {
                 .channel_nonces(network_id),
             GenericNetworkId::EVM(_) => {
                 unimplemented!("Bridge from liberland to EVM network is not supported")
+            }
+            GenericNetworkId::TON(_) => {
+                unimplemented!("Bridge from liberland to TON network is not supported")
             }
             GenericNetworkId::EVMLegacy(_) => unimplemented!(),
         }
