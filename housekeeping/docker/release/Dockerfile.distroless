@@ -10,7 +10,7 @@ COPY ./target/release/bridge-relayer /usr/local/bin/relayer
 
 RUN ldd /usr/local/bin/relayer | grep "=> /" | awk '{print $3}' | xargs -I '{}' cp -v '{}' /libs/
 
-FROM gcr.io/distroless/base-debian12
+FROM gcr.io/distroless/cc-debian12:nonroot
 
 COPY --from=builder /libs/* /usr/lib/
 COPY --from=builder /usr/local/bin/relayer /usr/local/bin/relayer
