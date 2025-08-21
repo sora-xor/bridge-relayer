@@ -29,6 +29,10 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #![allow(clippy::too_many_arguments)]
+//! Subxt-generated SORA (framenode) runtime bindings.
+//!
+//! Generated from `bytes/metadata.scale` with type substitutions mapping to
+//! bridge/common/sp-* types used by the relayer.
 
 #[macro_use]
 extern crate codec;

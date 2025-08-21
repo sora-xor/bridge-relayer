@@ -41,6 +41,7 @@ use bridge_types::{GenericNetworkId, SubNetworkId, H256};
 use sp_core::ecdsa;
 use sp_runtime::traits::Keccak256;
 
+/// Builder for multisig-based message relay (no BEEFY).
 pub struct RelayBuilder<S: SenderConfig, R: ReceiverConfig> {
     sender: Option<SubUnsignedClient<S>>,
     receiver: Option<SubUnsignedClient<R>>,
@@ -62,6 +63,7 @@ where
     S: SenderConfig,
     R: ReceiverConfig,
 {
+    /// Create a default builder.
     pub fn new() -> Self {
         Default::default()
     }
@@ -81,6 +83,7 @@ where
         self
     }
 
+    /// Finalize the builder and return a `Relay` instance.
     pub async fn build(self) -> AnyResult<Relay<S, R>> {
         let sender = self.sender.expect("sender client is needed");
         let receiver = self.receiver.expect("receiver client is needed");
@@ -109,6 +112,7 @@ where
     }
 }
 
+/// Multisig-based message relay between Substrate chains.
 #[derive(Clone)]
 pub struct Relay<S: SenderConfig, R: ReceiverConfig> {
     sender: SubUnsignedClient<S>,
@@ -125,12 +129,14 @@ where
     OtherParams<R>: Default,
     OtherParams<S>: Default,
 {
+    /// Current inbound channel nonce on receiver chain.
     async fn inbound_channel_nonce(&self) -> AnyResult<u64> {
         let storage = R::substrate_bridge_inbound_nonce(self.sender_network_id);
         let nonce = self.receiver.storage_fetch_or_default(&storage, ()).await?;
         Ok(nonce)
     }
 
+    /// Current outbound channel nonce on sender chain.
     async fn outbound_channel_nonce(&self) -> AnyResult<u64> {
         let nonce = self
             .sender
@@ -142,6 +148,7 @@ where
         Ok(nonce)
     }
 
+    /// Filter approvals to only those signed by current peer set.
     async fn approvals(&self, message: H256) -> AnyResult<Vec<ecdsa::Signature>> {
         let peers = self.receiver_peers().await?;
         let approvals = self
@@ -181,6 +188,7 @@ where
         Ok(peers)
     }
 
+    /// Periodic loop that collects enough approvals and submits the batch.
     pub async fn run(self) -> AnyResult<()> {
         loop {
             let public = self.signer.public();

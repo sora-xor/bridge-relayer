@@ -30,6 +30,13 @@
 
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
+//! Substrate clients and helpers.
+//!
+//! This module provides thin JSON-RPC clients built on Subxt and Jsonrpsee with
+//! helpers for storage reads, event decoding, and BEEFY/MMR/Assets RPC access.
+//! It exposes two client flavors:
+//! - `UnsignedClient<T>`: read-only and unsigned extrinsic submission.
+//! - `SignedClient<T>`: includes a signer and nonce management for submitting extrinsics.
 pub mod beefy_subscription;
 pub mod traits;
 pub mod types;
@@ -89,6 +96,7 @@ where
     }
 }
 
+/// Convert a raw event into a `Debug` string using the chain-specific event type.
 pub fn event_to_string<T: ConfigExt>(ev: EventDetails) -> String {
     let input = &mut ev.bytes();
     let phase = subxt::events::Phase::decode(input);
@@ -96,6 +104,7 @@ pub fn event_to_string<T: ConfigExt>(ev: EventDetails) -> String {
     format!("(Phase: {:?}, Event: {:?})", phase, event)
 }
 
+/// Debug-log all events from an extrinsic result, best-effort decoding.
 pub fn log_extrinsic_events<T: ConfigExt>(events: ExtrinsicEvents<T::Config>) {
     for ev in events.iter() {
         match ev {
@@ -109,6 +118,7 @@ pub fn log_extrinsic_events<T: ConfigExt>(events: ExtrinsicEvents<T::Config>) {
     }
 }
 
+/// Minimal wrapper to allow cloning the underlying Jsonrpsee client.
 #[derive(Debug, Clone)]
 pub struct ClonableClient(Arc<jsonrpsee::async_client::Client>);
 
@@ -131,6 +141,7 @@ impl RpcClientT for ClonableClient {
     }
 }
 
+/// Unsigned Substrate client backed by Subxt, with convenience helpers.
 #[derive(Debug, Clone)]
 pub struct UnsignedClient<T: ConfigExt> {
     api: ApiInner<T>,
@@ -138,6 +149,7 @@ pub struct UnsignedClient<T: ConfigExt> {
 }
 
 impl<T: ConfigExt> UnsignedClient<T> {
+    /// Connect to a node over WebSocket and initialize Subxt client/state.
     pub async fn new(url: impl Into<String>) -> AnyResult<Self> {
         let url: Uri = url.into().parse()?;
         let (sender, receiver) =
@@ -152,20 +164,24 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(Self { api, client })
     }
 
+    /// Low-level Jsonrpsee client for custom RPCs (BEEFY/MMR/Assets).
     pub fn rpc(&self) -> &jsonrpsee::async_client::Client {
         &self.client.0
     }
 
+    /// MMR RPC extension for generating leaf proofs.
     pub fn mmr(&self) -> &impl mmr_rpc::MmrApiClient<BlockHash<T>, BlockNumber<T>, MmrHash> {
         self.rpc()
     }
 
+    /// BEEFY RPC extension for fetching commitments.
     pub fn beefy(
         &self,
     ) -> &impl beefy_gadget_rpc::BeefyApiClient<types::EncodedBeefyCommitment, BlockHash<T>> {
         self.rpc()
     }
 
+    /// Assets RPC extension for querying balances and metadata (SORA pallets).
     pub fn assets(
         &self,
     ) -> &impl assets_rpc::AssetsAPIClient<
@@ -199,6 +215,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         self.rpc()
     }
 
+    /// Load auxiliary digest (offchain digest with bridge logs) at a given block hash.
     pub async fn auxiliary_digest(&self, at: Option<BlockHash<T>>) -> AnyResult<AuxiliaryDigest>
     where
         T: SenderConfig,
@@ -215,6 +232,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         })
     }
 
+    /// Fetch the latest outbound commitment for a given network at a block.
     pub async fn latest_commitment<N: Into<BlockNumberOrHash>>(
         &self,
         network_id: GenericNetworkId,
@@ -231,6 +249,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(commitment)
     }
 
+    /// Walk back to find a commitment by nonce, starting at `at`.
     pub async fn commitment_with_nonce<N: Into<BlockNumberOrHash>>(
         &self,
         network_id: GenericNetworkId,
@@ -311,10 +330,12 @@ impl<T: ConfigExt> UnsignedClient<T> {
         })
     }
 
+    /// Access the underlying Subxt `OnlineClient`.
     pub fn api(&self) -> &ApiInner<T> {
         &self.api
     }
 
+    /// Fetch a block header for the given block specifier.
     pub async fn header<N: Into<BlockNumberOrHash>>(&self, at: N) -> AnyResult<Header<T>> {
         let hash = self.block_hash(at).await?;
         let header = self
@@ -326,6 +347,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(header)
     }
 
+    /// Resolve a block number for the given block specifier.
     pub async fn block_number<N: Into<BlockNumberOrHash>>(
         &self,
         at: N,
@@ -334,11 +356,13 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(BlockNumber::<T>::from(header.number().clone()))
     }
 
+    /// Return the finalized head hash.
     pub async fn finalized_head(&self) -> AnyResult<BlockHash<T>> {
         let hash = self.api().rpc().finalized_head().await?;
         Ok(hash.into())
     }
 
+    /// Resolve a block hash for the given block specifier.
     pub async fn block_hash<N: Into<BlockNumberOrHash>>(&self, at: N) -> AnyResult<BlockHash<T>> {
         let block_number = match at.into() {
             BlockNumberOrHash::Number(n) => Some(n),
@@ -358,6 +382,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(res.into())
     }
 
+    /// Fetch a block by specifier.
     pub async fn block<N: Into<BlockNumberOrHash>>(
         &self,
         at: N,
@@ -372,6 +397,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(block)
     }
 
+    /// Fetch a storage value at a block hash.
     pub async fn storage_fetch<N, Address>(
         &self,
         address: &Address,
@@ -403,6 +429,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(res)
     }
 
+    /// Fetch a storage value or default at a block hash.
     pub async fn storage_fetch_or_default<N, Address>(
         &self,
         address: &Address,
@@ -434,6 +461,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(res)
     }
 
+    /// Read a constant value.
     pub fn constant_fetch_or_default<Address>(
         &self,
         address: &Address,
@@ -446,10 +474,12 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(res)
     }
 
+    /// Attach a signer to produce a `SignedClient`.
     pub async fn signed(self, signer: PairSigner<T>) -> AnyResult<SignedClient<T>> {
         SignedClient::<T>::new(self, signer).await
     }
 
+    /// Heuristically detect errors that mean a transaction is already in the pool or banned.
     pub fn is_transaction_imported_or_banned(error: &subxt::Error) -> bool {
         match error {
             subxt::Error::Rpc(subxt::error::RpcError::ClientError(error)) => {
@@ -467,6 +497,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         }
     }
 
+    /// Submit an unsigned extrinsic and wait for in-block + success.
     pub async fn submit_unsigned_extrinsic<P: subxt::tx::TxPayload>(
         &self,
         xt: &P,
@@ -509,6 +540,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(())
     }
 
+    /// Submit an unsigned extrinsic, returning Ok(false) if it raced and was imported/banned.
     pub async fn submit_concurrent_unsigned_extrinsic<P: subxt::tx::TxPayload>(
         &self,
         xt: &P,
@@ -531,6 +563,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
     }
 }
 
+/// Signed Substrate client that manages account nonce and submissions.
 #[derive(Clone)]
 pub struct SignedClient<T: ConfigExt> {
     inner: UnsignedClient<T>,

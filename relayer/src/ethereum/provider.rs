@@ -27,6 +27,11 @@
 // OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//! HTTP/WS-unifying JSON-RPC client for ethers-rs.
+//!
+//! `UniversalClient` implements `JsonRpcClient` and delegates to either a
+//! WebSocket or HTTP client depending on the URL scheme, enabling a single
+//! provider type across both transports.
 
 pub use ethers::prelude::*;
 use serde::de::DeserializeOwned;
@@ -34,12 +39,14 @@ use serde::Serialize;
 use std::fmt::Debug;
 use url::Url;
 
+/// JSON-RPC client that supports either WS or HTTP under one enum.
 #[derive(Clone, Debug)]
 pub enum UniversalClient {
     Ws(Ws),
     Http(Http),
 }
 
+/// Error type bridging WS/HTTP client errors and invalid schemes.
 #[derive(Debug, thiserror::Error)]
 pub enum UniversalClientError {
     #[error(transparent)]
@@ -96,6 +103,7 @@ impl JsonRpcClient for UniversalClient {
 }
 
 impl UniversalClient {
+    /// Construct a client from a URL. Chooses WS for `ws/wss` and HTTP for `http/https`.
     pub async fn new(url: Url) -> Result<Self, UniversalClientError> {
         match url.scheme() {
             "ws" | "wss" => Ok(UniversalClient::Ws(Ws::connect(url).await?)),

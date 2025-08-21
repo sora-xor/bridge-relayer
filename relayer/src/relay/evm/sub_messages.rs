@@ -44,6 +44,7 @@ use ethers::providers::Middleware;
 use sp_core::{ecdsa, H256};
 use std::time::Duration;
 
+/// Builder for Substrate → EVM batch relay.
 pub struct RelayBuilder {
     sender: Option<SubUnsignedClient<MainnetConfig>>,
     receiver: Option<EthUnsignedOrSignedClient>,
@@ -63,6 +64,7 @@ impl Default for RelayBuilder {
 }
 
 impl RelayBuilder {
+    /// Create a default builder.
     pub fn new() -> Self {
         Default::default()
     }
@@ -87,6 +89,7 @@ impl RelayBuilder {
         self
     }
 
+    /// Finalize the builder and return a `Relay` instance.
     pub async fn build(self) -> AnyResult<Relay> {
         let sender = self.sender.expect("sender client is needed");
         let receiver = self.receiver.expect("receiver client is needed");
@@ -111,6 +114,7 @@ impl RelayBuilder {
     }
 }
 
+/// Substrate → EVM batch relay.
 #[derive(Clone)]
 pub struct Relay {
     sub: SubUnsignedClient<MainnetConfig>,
@@ -123,15 +127,18 @@ pub struct Relay {
 
 // Relays batches of messages from Substrate to Ethereum.
 impl Relay {
+    /// Apply overhead to the sum of message gas costs for submission.
     fn submit_message_gas(&self, messages_total_gas: U256) -> U256 {
         messages_total_gas.saturating_add(260000.into())
     }
 
+    /// Read current inbound channel nonce from EVM.
     async fn inbound_channel_nonce(&self) -> AnyResult<u64> {
         let nonce = either::for_both!(&self.inbound_channel, c => c.batch_nonce().call().await?);
         Ok(nonce as u64)
     }
 
+    /// Read current outbound channel nonce from Substrate.
     async fn outbound_channel_nonce(&self) -> AnyResult<u64> {
         let nonce = self
             .sub
@@ -145,12 +152,14 @@ impl Relay {
         Ok(nonce)
     }
 
+    /// Produce an Ethereum Signed Message pre-hash for ECDSA approvals.
     pub fn prepare_evm_signed_message(msg: H256) -> H256 {
         let mut prefix = b"\x19Ethereum Signed Message:\n32".to_vec();
         prefix.extend(msg.as_bytes());
         sp_core::keccak_256(&prefix).into()
     }
 
+    /// Send a commitment to the inbound EVM channel with approvals.
     async fn send_commitment(
         &self,
         commitment: OutboundCommitment<MaxU32, MaxU32>,

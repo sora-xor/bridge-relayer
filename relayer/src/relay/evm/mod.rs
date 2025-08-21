@@ -28,5 +28,9 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! EVM-related relayers.
+//!
+//! - `sub_messages`: Substrate → EVM batches (submit to ChannelHandler / FAApp)
+//! - `evm_messages`: EVM → Substrate (consume events, build commitments)
 pub mod evm_messages;
 pub mod sub_messages;
