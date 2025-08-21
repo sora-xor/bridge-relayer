@@ -28,6 +28,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! SORA Bridge Relayer binary.
+//!
+//! This executable provides a CLI for:
+//! - registering bridge components on SORA and partner chains
+//! - relaying headers and messages between EVM, SORA, parachains, and Liberland
+//! - various helper utilities (BEEFY subscription, fetching headers, etc.)
+//!
+//! See `relayer/AGENTS.md` and `AGENTS.md` in the repo root for usage examples.
+
 mod cli;
 mod ethereum;
 mod relay;
@@ -41,6 +50,7 @@ extern crate log;
 #[macro_use]
 extern crate anyhow;
 
+/// Entry point. Initializes logging and dispatches CLI commands.
 #[tokio::main]
 async fn main() -> AnyResult<()> {
     init_log();
@@ -52,6 +62,7 @@ async fn main() -> AnyResult<()> {
     Ok(())
 }
 
+/// Initialize `env_logger` with `RUST_LOG` or default to `info`.
 fn init_log() {
     if std::env::var_os("RUST_LOG").is_none() {
         env_logger::builder().parse_filters("info").init();

@@ -28,6 +28,12 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Ethash proof utilities.
+//!
+//! - `cache`: DAG cache builder and storage
+//! - `dag_merkle_root`: DAG Merkle root and proof generation
+//! - `mtree`: Merkle tree utilities
+
 pub mod cache;
 pub mod dag_merkle_root;
 pub mod mtree;

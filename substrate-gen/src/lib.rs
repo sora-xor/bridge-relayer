@@ -28,6 +28,9 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Subxt-generated runtime bindings for SORA.
+//!
+//! Metadata is stored in `bytes/metadata.scale` and can be refreshed from a live node.
 #![allow(clippy::too_many_arguments)]
 
 #[macro_use]

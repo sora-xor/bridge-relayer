@@ -28,6 +28,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Ethereum provider and proof utilities.
+//!
+//! This module exposes typed Ethereum clients (unsigned and signed),
+//! a scheme-agnostic provider (`provider.rs`), and helpers for building
+//! headers and measuring gas. It is used by relayers and registration flows.
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
 pub mod ethashproof;
@@ -52,6 +57,7 @@ pub type SignedClientInner = SignerMiddleware<UnsignedClientInner, EthWallet>;
 
 pub type UnsignedClientInner = Provider<UniversalClient>;
 
+/// Unsigned EVM client for reads over WS/HTTP.
 #[derive(Clone, Debug)]
 pub struct UnsignedClient(Arc<UnsignedClientInner>);
 
@@ -63,12 +69,14 @@ impl Deref for UnsignedClient {
 }
 
 impl UnsignedClient {
+    /// Create a new provider backed by `UniversalClient` (ws/wss/http/https).
     pub async fn new(url: Url) -> AnyResult<Self> {
         debug!("Connect to {}", url);
         let provider = Provider::new(UniversalClient::new(url).await?);
         Ok(Self(Arc::new(provider)))
     }
 
+    /// Attach a signer to the client and optionally enable gas metric logging.
     pub async fn signed(
         &self,
         key: SigningKey,
@@ -84,6 +92,7 @@ impl UnsignedClient {
         })
     }
 
+    /// Attach a signer using a hex-encoded private key string.
     pub async fn sign_with_string(
         &self,
         key: &str,
@@ -99,6 +108,7 @@ impl UnsignedClient {
     }
 }
 
+/// Signed EVM client for sending transactions and recording gas estimates.
 #[derive(Clone, Debug)]
 pub struct SignedClient {
     inner: Arc<SignedClientInner>,
@@ -113,6 +123,7 @@ impl Deref for SignedClient {
 }
 
 impl SignedClient {
+    /// Create a new signed client to a given URL with a provided signing key.
     pub async fn new(url: Url, key: SigningKey, gas_metrics: Option<PathBuf>) -> AnyResult<Self> {
         debug!("Connect to {}", url);
         let provider =
@@ -127,6 +138,7 @@ impl SignedClient {
         })
     }
 
+    /// Return an unsigned view of this client for read-only calls.
     pub fn unsigned(&self) -> UnsignedClient {
         UnsignedClient(Arc::new(self.inner.inner().clone()))
     }
@@ -135,6 +147,7 @@ impl SignedClient {
         self.inner.clone()
     }
 
+    /// Estimate and optionally persist gas usage for a contract call.
     pub async fn save_gas_price<D, M>(
         &self,
         call: &ContractCall<M, D>,
@@ -165,6 +178,7 @@ impl SignedClient {
     }
 }
 
+/// Convert an `ethers::types::Block` into a bridge `Header` with PoW seal fields.
 pub fn make_header(block: Block<H256>) -> Header {
     let mix_hash_rlp = rlp::encode(&block.mix_hash.unwrap_or_default());
     let nonce_rlp = rlp::encode(&block.nonce.unwrap_or_default());

@@ -28,6 +28,10 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! SORA-side registration of EVM apps, channels, and Ethash light client.
+//!
+//! These flows use sudo calls on SORA to register contracts and network settings.
+
 mod app;
 mod asset;
 mod channels;

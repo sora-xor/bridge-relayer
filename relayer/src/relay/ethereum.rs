@@ -28,6 +28,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Ethereum header import relay.
+//!
+//! Continuously scans an EVM chain for new blocks, builds Ethash header proofs,
+//! and submits them to the SORA light client. Keeps local LRU to avoid re-sending
+//! and throttles imports while the best block on SORA catches up.
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
 
@@ -44,6 +49,7 @@ use subxt::tx::Signer;
 
 const MAX_HEADER_IMPORTS_WITHOUT_CHECK: u64 = 20;
 
+/// Imports finalized EVM headers into SORA.
 #[derive(Clone)]
 pub struct Relay {
     sub: SubSignedClient<MainnetConfig>,
@@ -54,6 +60,7 @@ pub struct Relay {
 }
 
 impl Relay {
+    /// Construct a relay by discovering `chain_id` and network consensus from SORA storage.
     pub async fn new(
         sub: SubSignedClient<MainnetConfig>,
         eth: EthUnsignedClient,
@@ -79,6 +86,11 @@ impl Relay {
         })
     }
 
+    /// Main loop:
+    /// - fetch finalized and best blocks from SORA
+    /// - stream EVM blocks starting from finalized+1
+    /// - ensure parent chain continuity using a small LRU set
+    /// - submit header import extrinsics when proofs are ready
     pub async fn run(&self) -> AnyResult<()> {
         let finalized_block = self
             .sub
@@ -152,6 +164,7 @@ impl Relay {
         }
     }
 
+    /// Build proof for an EVM block and submit an import extrinsic.
     async fn process_block(&self, block: Block<H256>) -> AnyResult<()> {
         let nonce = block.nonce.unwrap_or_default();
         let header = make_header(block);

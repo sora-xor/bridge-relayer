@@ -28,6 +28,13 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Bridge command group.
+//!
+//! Provides subcommands for:
+//! - running relayers between chains
+//! - registering bridge components (contracts, light clients, channels)
+//! - testing transfers and utilities
+
 mod register;
 mod relay;
 mod test_transfers;

@@ -28,6 +28,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Ethers.rs contract bindings for the bridge EVM contracts.
+//!
+//! The ABI JSONs are vendored via the `sora2-federated-bridge-evm-contracts` submodule.
+//! This module exposes typed clients, events, and calls for the relayer.
+
 ethers::contract::abigen!(
     InboundChannel,
     "sora2-federated-bridge-evm-contracts/abi/InboundChannel.json",

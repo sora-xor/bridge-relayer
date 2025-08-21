@@ -28,6 +28,12 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Parachain relay commands.
+//!
+//!
+//! - `sora`: parachain → SORA relay (trusted or BEEFY)
+//! - `parachain`: parachain ↔ parachain relay (trusted or BEEFY)
+
 mod parachain;
 mod sora;
 

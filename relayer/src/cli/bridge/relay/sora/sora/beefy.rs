@@ -28,6 +28,10 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! SORA ↔ SORA relay with BEEFY proofs.
+//!
+//! Useful in setups where two SORA-like networks are bridged via BEEFY commitments.
+
 use crate::cli::prelude::*;
 use crate::relay::beefy_syncer::BeefySyncer;
 use crate::relay::parachain::RelayBuilder;

@@ -28,6 +28,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Register EVM bridge apps on SORA.
+//!
+//! Supports registering ERC20, Native, EthApp variants, and Migration app.
+//! Some variants will create or reuse SORA assets depending on parameters.
+
 use std::str::FromStr;
 
 use crate::{cli::prelude::*, substrate::AssetId};
@@ -45,6 +50,7 @@ pub(crate) struct Command {
     apps: Apps,
 }
 
+/// App variants to register.
 #[derive(Subcommand, Debug)]
 pub(crate) enum Apps {
     /// Register ERC20App
@@ -104,6 +110,7 @@ pub(crate) enum Apps {
 }
 
 impl Command {
+    /// Execute the chosen app registration via sudo.
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_unsigned_ethereum().await?;
         let sub = self.sub.get_signed_substrate().await?;
@@ -174,6 +181,7 @@ impl Command {
         Ok(())
     }
 
+    /// Check if the app is already registered on SORA and log the current address.
     async fn check_if_registered(
         &self,
         sub: &SubSignedClient<MainnetConfig>,

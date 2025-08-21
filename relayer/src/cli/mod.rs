@@ -28,6 +28,17 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! CLI tree for the bridge relayer.
+//!
+//! The CLI is organized under the `Commands` enum. Global connection
+//! parameters for SORA/Substrate, Parachain, Liberland, and Ethereum are
+//! flattened onto the root `Cli` struct and reused by subcommands.
+//!
+//! Adding new commands:
+//! - create a module under `src/cli/...`
+//! - extend the `Commands` enum
+//! - implement an async `run()` method on your command type
+
 mod bridge;
 mod calc_dag_roots;
 mod copy_liquidity;
@@ -45,7 +56,10 @@ pub use utils::*;
 use crate::prelude::*;
 use clap::*;
 
-/// Bridge relayer
+/// Bridge relayer CLI root.
+///
+/// Global options provide connection and key material for supported chains and are
+/// available to all subcommands. See subcommand help for specific flows.
 #[derive(Parser, Debug)]
 #[clap(version, author)]
 pub struct Cli {
@@ -104,6 +118,7 @@ impl Cli {
     }
 }
 
+/// Top-level command tree.
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Subscribe beefy to new commitments

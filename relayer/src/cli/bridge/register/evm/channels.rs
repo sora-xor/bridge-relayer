@@ -28,9 +28,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Reset EVM channel contracts (inbound and outbound).
+//!
+//! Requires the EVM signer to be the owner of the channel contracts. Useful when
+//! the on-chain state must be cleared to re-synchronize with SORA.
+
 use crate::cli::prelude::*;
 use bridge_types::H160;
 
+/// Reset inbound/outbound channel contracts discovered via EthApp.
 #[derive(Args, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
@@ -41,6 +47,7 @@ pub(crate) struct Command {
 }
 
 impl Command {
+    /// Perform reset on both channel contracts.
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_signed_ethereum().await?;
         let eth_app = ethereum_gen::ETHApp::new(self.eth_app.clone(), eth.inner());

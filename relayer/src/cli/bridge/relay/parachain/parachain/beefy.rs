@@ -28,9 +28,14 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Parachain ↔ Parachain relay with BEEFY proofs.
+//!
+//! Uses BEEFY commitments to move messages between two parachains.
+
 use crate::cli::prelude::*;
 use crate::relay::parachain::RelayBuilder;
 
+/// Start the parachain ↔ parachain relay using BEEFY proofs.
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
@@ -41,6 +46,7 @@ pub(crate) struct Command {
 }
 
 impl Command {
+    /// Connect both sides and run BEEFY+messages relay.
     pub(super) async fn run(&self) -> AnyResult<()> {
         let receiver = self.para.get_signed_substrate().await?;
         let sender = receiver.clone().unsigned();

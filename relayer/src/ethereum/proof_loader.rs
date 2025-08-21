@@ -28,6 +28,13 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Proof generation and caching for Ethereum headers and receipts.
+//!
+//! - Ethash: maintains small LRU caches for epoch DAG and cache data, and builds
+//!   `DoubleNodeWithMerkleProof` entries for header verification.
+//! - Receipts: lazily fetch and store block receipts and produce Merkle proofs for
+//!   specific transaction indices.
+
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -43,6 +50,7 @@ use substrate_gen::runtime::runtime_types::bridge_types::ethashproof::MixNonce;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 
+/// Builds Ethash header proofs and EVM receipt proofs with small LRU caches.
 #[derive(Debug, Clone)]
 pub struct ProofLoader {
     base_dir: PathBuf,
@@ -53,6 +61,9 @@ pub struct ProofLoader {
 }
 
 impl ProofLoader {
+    /// Create a new proof loader. Files are stored under:
+    /// - `<base>/cache`: DAG cache
+    /// - `<base>/data`: DAG data
     pub fn new(eth: EthUnsignedClient, base_dir: PathBuf) -> Self {
         Self {
             base_dir,
@@ -69,14 +80,17 @@ impl ProofLoader {
         }
     }
 
+    /// Directory where cache files are stored.
     fn cache_dir(&self) -> PathBuf {
         self.base_dir.join("cache")
     }
 
+    /// Directory where DAG data files are stored.
     fn data_dir(&self) -> PathBuf {
         self.base_dir.join("data")
     }
 
+    /// Build Ethash header proofs and mix nonce for a header.
     pub async fn header_proof(
         &self,
         epoch_length: u64,
@@ -123,6 +137,7 @@ impl ProofLoader {
         Ok((res, MixNonce(mix_nonce)))
     }
 
+    /// Compute Ethash dataset indices used for proof generation.
     pub async fn get_verification_indices(
         &self,
         epoch_length: u64,
@@ -135,6 +150,7 @@ impl ProofLoader {
         ethash::hashimoto_light_indices(header_hash, nonce, full_size, &cache[..])
     }
 
+    /// Load or build Merkle tree cache for a given epoch.
     async fn get_cache_merkle(
         &self,
         epoch_length: u64,
@@ -157,6 +173,7 @@ impl ProofLoader {
         Ok(cache)
     }
 
+    /// Load or build Ethash cache for a given epoch.
     async fn get_cache_ethash(&self, epoch_length: u64, epoch: u64) -> Arc<Vec<u8>> {
         let mut lock = self.cache_ethash.lock().await;
         if let Some(cache) = lock.get(&epoch).cloned() {
@@ -171,6 +188,7 @@ impl ProofLoader {
         cache
     }
 
+    /// Build a receipt proof for the `tx_id`th transaction inside `block`.
     pub async fn receipt_proof(&self, block: H256, tx_id: usize) -> AnyResult<Vec<Vec<u8>>> {
         if let Some(cache) = self.receipts.lock().await.get_mut(&block) {
             return Ok(cache.prove(tx_id)?);

@@ -28,6 +28,10 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Subscribe to BEEFY justifications and print them to stdout.
+//!
+//! Useful for debugging and monitoring BEEFY activity on a SORA/Substrate node.
+
 use crate::cli::prelude::*;
 use futures::StreamExt;
 

@@ -28,10 +28,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Reset EVM BEEFY light client contract.
+//!
+//! Owner-only action to reset validator sets and block number to match SORA.
+
 use crate::cli::prelude::*;
 use bridge_types::H160;
 use ethereum_gen::ValidatorSet;
 
+/// Reset BEEFY contract discovered via EthApp → InboundChannel.
 #[derive(Args, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
@@ -44,6 +49,7 @@ pub(crate) struct Command {
 }
 
 impl Command {
+    /// Perform BEEFY reset if the signer is the contract owner.
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_signed_ethereum().await?;
         let sub = self.sub.get_unsigned_substrate().await?;

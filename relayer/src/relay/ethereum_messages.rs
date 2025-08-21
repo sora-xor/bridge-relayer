@@ -28,6 +28,10 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! EVM → SORA channel message relay.
+//!
+//! Consumes `OutboundChannel` Message and `InboundChannel` BatchDispatched events
+//! from an EVM chain, builds receipt proofs, and submits them to SORA bridge pallets.
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
 
@@ -54,6 +58,7 @@ pub struct Message {
     pub proof: Proof,
 }
 
+/// Pulls EVM logs and pushes verified messages to SORA.
 pub struct SubstrateMessagesRelay {
     sub: SubSignedClient<MainnetConfig>,
     eth: EthUnsignedClient,
@@ -65,6 +70,7 @@ pub struct SubstrateMessagesRelay {
 }
 
 impl SubstrateMessagesRelay {
+    /// Initialize relay by loading channel addresses from SORA storage.
     pub async fn new(
         sub: SubSignedClient<MainnetConfig>,
         eth: EthUnsignedClient,
@@ -100,6 +106,8 @@ impl SubstrateMessagesRelay {
         })
     }
 
+    /// Step the relay once: submit new Message and BatchDispatched events
+    /// up to the current finalized EVM block known by SORA.
     pub async fn handle_messages(&mut self) -> AnyResult<()> {
         let current_eth_block = self
             .sub
@@ -124,6 +132,7 @@ impl SubstrateMessagesRelay {
         Ok(())
     }
 
+    /// Submit `Message` events with nonces higher than SORA storage.
     async fn handle_message_events(&mut self, current_eth_block: u64) -> AnyResult<()> {
         let eth = self.eth.inner();
         let outbound_channel =
@@ -185,6 +194,7 @@ impl SubstrateMessagesRelay {
         Ok(())
     }
 
+    /// Submit `BatchDispatched` events with nonces higher than SORA storage.
     async fn handle_batch_dispatched(&mut self, current_eth_block: u64) -> AnyResult<()> {
         let eth = self.eth.inner();
         let inbound_channel = ethereum_gen::InboundChannel::new(self.inbound_channel, eth.clone());
@@ -253,6 +263,7 @@ impl SubstrateMessagesRelay {
         Ok(())
     }
 
+    /// Build a receipt proof for the transaction that emitted the given log.
     async fn make_message(&self, log: EthersLog) -> AnyResult<Message> {
         let block_hash = log.block_hash.unwrap();
         let tx_index = log.transaction_index.unwrap().as_usize();
@@ -275,6 +286,7 @@ impl SubstrateMessagesRelay {
         })
     }
 
+    /// Main loop: periodically scan and submit messages.
     pub async fn run(mut self) -> AnyResult<()> {
         let current_eth_block = self
             .sub

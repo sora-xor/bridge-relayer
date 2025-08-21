@@ -28,6 +28,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Run the EVM → SORA relayer.
+//!
+//! Ensures the light client and channels are registered on SORA, then
+//! runs header import and (optionally) message relay tasks.
+
 use crate::cli::prelude::*;
 use crate::ethereum::proof_loader::ProofLoader;
 use crate::relay::ethereum::Relay;
@@ -35,6 +40,7 @@ use crate::relay::ethereum_messages::SubstrateMessagesRelay;
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// Start the EVM → SORA relay.
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
@@ -50,6 +56,7 @@ pub(crate) struct Command {
 }
 
 impl Command {
+    /// Connect, wait for prerequisites, then run header and/or message relay.
     pub async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_unsigned_ethereum().await?;
         let sub = self.sub.get_signed_substrate().await?;

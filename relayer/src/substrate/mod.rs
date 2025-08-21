@@ -28,6 +28,12 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Substrate helpers and typed client wrappers.
+//!
+//! This module wraps Subxt to provide:
+//! - ergonomic signed/unsigned clients
+//! - typed storage access and extrinsic submission with logging
+//! - MMR/BEEFY helpers and subscriptions
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
 pub mod beefy_subscription;
@@ -58,6 +64,9 @@ pub use types::*;
 
 /// Finds the first occurrence of an element 'e' so that 'f(e)' is greater or equal 'value' in
 /// storage with ascending values. Returns the index of 'e'.
+/// Binary search over on-chain ascending data to find the first index with
+/// value `>= target`. The callback `f` should read storage at a given index
+/// and return `Ok(Some(value))`, `Ok(None)` if index is missing, or an error.
 pub async fn binary_search_first_occurrence<N: AtLeast32BitUnsigned, T: PartialOrd, F, Fut>(
     low: N,
     high: N,
@@ -87,6 +96,7 @@ where
     }
 }
 
+/// Human-readable representation of a Substrate event and its phase.
 pub fn event_to_string<T: ConfigExt>(ev: EventDetails) -> String {
     let input = &mut ev.bytes();
     let phase = subxt::events::Phase::decode(input);
@@ -94,6 +104,7 @@ pub fn event_to_string<T: ConfigExt>(ev: EventDetails) -> String {
     format!("(Phase: {:?}, Event: {:?})", phase, event)
 }
 
+/// Log all events from a successfully executed extrinsic.
 pub fn log_extrinsic_events<T: ConfigExt>(events: ExtrinsicEvents<T::Config>) {
     for ev in events.iter() {
         match ev {
@@ -107,6 +118,7 @@ pub fn log_extrinsic_events<T: ConfigExt>(events: ExtrinsicEvents<T::Config>) {
     }
 }
 
+/// Cloneable RPC client wrapper required by Subxt traits.
 #[derive(Debug, Clone)]
 pub struct ClonableClient(Arc<jsonrpsee::async_client::Client>);
 
@@ -129,6 +141,7 @@ impl RpcClientT for ClonableClient {
     }
 }
 
+/// Unsigned Subxt client with extra convenience methods.
 #[derive(Debug, Clone)]
 pub struct UnsignedClient<T: ConfigExt> {
     api: ApiInner<T>,
@@ -154,16 +167,19 @@ impl<T: ConfigExt> UnsignedClient<T> {
         &self.client.0
     }
 
+    /// Access the MMR RPC API.
     pub fn mmr(&self) -> &impl mmr_rpc::MmrApiClient<BlockHash<T>, BlockNumber<T>, MmrHash> {
         self.rpc()
     }
 
+    /// Access the BEEFY RPC API.
     pub fn beefy(
         &self,
     ) -> &impl beefy_gadget_rpc::BeefyApiClient<types::EncodedBeefyCommitment, BlockHash<T>> {
         self.rpc()
     }
 
+    /// Access the Assets pallet runtime API.
     pub fn assets(
         &self,
     ) -> &impl assets_rpc::AssetsAPIClient<
@@ -197,6 +213,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         self.rpc()
     }
 
+    /// Fetch the latest auxiliary digest logs at a given block hash.
     pub async fn auxiliary_digest(&self, at: Option<BlockHash<T>>) -> AnyResult<AuxiliaryDigest>
     where
         T: SenderConfig,
@@ -213,6 +230,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         })
     }
 
+    /// Fetch the latest commitment for a given network at a target block.
     pub async fn latest_commitment<N: Into<BlockNumberOrHash>>(
         &self,
         network_id: GenericNetworkId,
@@ -229,6 +247,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(commitment)
     }
 
+    /// Walk back commitments until a specific `nonce` is found.
     pub async fn commitment_with_nonce<N: Into<BlockNumberOrHash>>(
         &self,
         network_id: GenericNetworkId,
@@ -252,6 +271,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         }
     }
 
+    /// Calculate the first block number covered by the current MMR snapshot.
     pub async fn beefy_start_block(&self) -> AnyResult<u64> {
         let latest_finalized_hash = self.api().rpc().finalized_head().await?;
         let latest_finalized_number = self
@@ -272,6 +292,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(beefy_start_block)
     }
 
+    /// Generate an MMR proof for a given block number at block `at`.
     pub async fn mmr_generate_proof(
         &self,
         block_number: BlockNumber<T>,
@@ -309,10 +330,12 @@ impl<T: ConfigExt> UnsignedClient<T> {
         })
     }
 
+    /// Access the underlying Subxt API.
     pub fn api(&self) -> &ApiInner<T> {
         &self.api
     }
 
+    /// Fetch the header for a given block number/hash.
     pub async fn header<N: Into<BlockNumberOrHash>>(&self, at: N) -> AnyResult<Header<T>> {
         let hash = self.block_hash(at).await?;
         let header = self
@@ -324,6 +347,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(header)
     }
 
+    /// Resolve a block number from a number/hash selector.
     pub async fn block_number<N: Into<BlockNumberOrHash>>(
         &self,
         at: N,
@@ -332,11 +356,13 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(BlockNumber::<T>::from(header.number().clone()))
     }
 
+    /// Get the hash of the latest finalized block.
     pub async fn finalized_head(&self) -> AnyResult<BlockHash<T>> {
         let hash = self.api().rpc().finalized_head().await?;
         Ok(hash.into())
     }
 
+    /// Resolve a block hash from a number/hash selector.
     pub async fn block_hash<N: Into<BlockNumberOrHash>>(&self, at: N) -> AnyResult<BlockHash<T>> {
         let block_number = match at.into() {
             BlockNumberOrHash::Number(n) => Some(n),
@@ -356,6 +382,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(res.into())
     }
 
+    /// Fetch a full block by number/hash selector.
     pub async fn block<N: Into<BlockNumberOrHash>>(
         &self,
         at: N,
@@ -370,6 +397,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(block)
     }
 
+    /// Read storage at a given address and block selector.
     pub async fn storage_fetch<N, Address>(
         &self,
         address: &Address,
@@ -401,6 +429,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(res)
     }
 
+    /// Read storage or return the default value if none is present.
     pub async fn storage_fetch_or_default<N, Address>(
         &self,
         address: &Address,
@@ -432,6 +461,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(res)
     }
 
+    /// Read a constant value from metadata.
     pub fn constant_fetch_or_default<Address>(
         &self,
         address: &Address,
@@ -444,10 +474,12 @@ impl<T: ConfigExt> UnsignedClient<T> {
         Ok(res)
     }
 
+    /// Attach a signer and return a `SignedClient` for submitting extrinsics.
     pub async fn signed(self, signer: PairSigner<T>) -> AnyResult<SignedClient<T>> {
         SignedClient::<T>::new(self, signer).await
     }
 
+    /// Submit an unsigned extrinsic and wait for success, logging all events.
     pub async fn submit_unsigned_extrinsic<P: subxt::tx::TxPayload>(
         &self,
         xt: &P,

@@ -28,6 +28,12 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! EVM receipt encoding and proof utilities.
+//!
+//! - Builds a receipts trie for a given block and verifies the receipts root.
+//! - Provides Merkle proofs for a transaction index within that block.
+//! - Encodes receipts in legacy/access-list/EIP-1559 typed formats.
+
 use super::*;
 use bridge_types::log::Log;
 use eth_trie::Trie;
@@ -37,12 +43,14 @@ use futures::TryStreamExt;
 use rlp::RlpStream;
 use std::sync::Arc;
 
+/// A block receipts trie with utilities to produce Merkle proofs.
 #[derive(Debug)]
 pub struct BlockWithReceipts {
     trie: eth_trie::EthTrie<eth_trie::MemoryDB>,
 }
 
 impl BlockWithReceipts {
+    /// Load all receipts for `block_id`, build and verify the receipts trie.
     pub async fn load<M, B>(client: M, block_id: B) -> anyhow::Result<Self>
     where
         M: Middleware + Send + Sync,
@@ -83,6 +91,7 @@ impl BlockWithReceipts {
         Ok(Self { trie })
     }
 
+    /// Create a Merkle proof for the `tx_id`th receipt.
     pub fn prove(&mut self, tx_id: usize) -> AnyResult<Vec<Vec<u8>>> {
         let key = rlp::encode(&tx_id);
         let proof = self.trie.get_proof(&key)?;
@@ -90,6 +99,7 @@ impl BlockWithReceipts {
     }
 }
 
+/// Status of a transaction receipt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionOutcome {
     Unknown,
@@ -109,6 +119,7 @@ impl From<&TransactionReceipt> for TransactionOutcome {
     }
 }
 
+/// Legacy-form EVM receipt (common payload for typed receipts).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LegacyReceipt {
     pub gas_used: U256,
@@ -157,6 +168,7 @@ impl LegacyReceipt {
     }
 }
 
+/// EIP-2718 transaction type identifiers.
 #[derive(Eq, Hash, Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum TypedTxId {
@@ -166,6 +178,7 @@ pub enum TypedTxId {
     Legacy = 0x00,
 }
 
+/// Receipt variants for legacy/access-list/EIP-1559 transactions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypedReceipt {
     Legacy(LegacyReceipt),

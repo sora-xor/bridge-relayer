@@ -31,6 +31,12 @@
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
 
+//! Fetch and print a finalized Ethereum header.
+//!
+//! Computes the target block either by explicit `--number` or by subtracting
+//! `--descendants-until-final` from the latest block, then prints a JSON header
+//! and verifies the hash.
+
 use crate::cli::prelude::*;
 use crate::ethereum::make_header;
 use ethers::prelude::*;

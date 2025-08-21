@@ -28,10 +28,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Register EVM channel addresses on SORA (sudo).
+//!
+//! Persists inbound and outbound channel addresses for an EVM `chainid` in SORA storage.
+
 use crate::cli::prelude::*;
 use bridge_types::H160;
 use substrate_gen::runtime;
 
+/// Register inbound/outbound channel addresses for the current EVM chain.
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
@@ -47,6 +52,7 @@ pub(crate) struct Command {
 }
 
 impl Command {
+    /// Register channels if not yet present in SORA storage.
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_unsigned_ethereum().await?;
         let sub = self.sub.get_signed_substrate().await?;

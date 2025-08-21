@@ -28,6 +28,16 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Shared CLI helpers and typed client builders.
+//!
+//! This module provides:
+//! - `Network`: flag parsing for selecting a known or custom EVM network config
+//! - `SubstrateClient`/`ParachainClient`/`LiberlandClient`: WS RPC + signer wiring
+//! - `EthereumClient`: WS/HTTP provider + signer wiring
+//!
+//! Each client offers `get_unsigned_*` and `get_signed_*` convenience methods that reuse
+//! global CLI options and perform basic validation.
+
 use std::path::PathBuf;
 
 use super::error::*;
@@ -36,6 +46,7 @@ use bridge_types::network_config::NetworkConfig;
 use clap::error::ErrorKind;
 use clap::*;
 
+/// EVM network selection for Ethash light client registration.
 #[derive(Clone, Debug)]
 pub enum Network {
     Mainnet,
@@ -112,6 +123,11 @@ impl FromArgMatches for Network {
 }
 
 impl Network {
+    /// Load a `bridge_types::network_config::NetworkConfig` for the selected network.
+    ///
+    /// - Well-known variants return baked-in configs.
+    /// - `Custom { path }` reads JSON from disk.
+    /// - `None` yields a CLI error.
     pub fn config(&self) -> AnyResult<NetworkConfig> {
         let res = match self {
             Network::Mainnet => NetworkConfig::Mainnet,
@@ -135,6 +151,7 @@ impl Network {
     }
 }
 
+/// Reusable parameters and helpers for connecting to a SORA/Substrate node.
 #[derive(Args, Debug, Clone)]
 pub struct SubstrateClient {
     #[clap(from_global)]
@@ -146,6 +163,7 @@ pub struct SubstrateClient {
 }
 
 impl SubstrateClient {
+    /// Obtain the ECDSA key URI from flags or a file. Errors if both or none provided.
     pub fn get_key_string(&self) -> AnyResult<String> {
         match (&self.substrate_key, &self.substrate_key_file) {
             (Some(_), Some(_)) => Err(CliError::BothKeyTypesProvided.into()),
@@ -155,6 +173,7 @@ impl SubstrateClient {
         }
     }
 
+    /// Return the WebSocket URL to connect to.
     pub fn get_url(&self) -> AnyResult<String> {
         Ok(self
             .substrate_url
@@ -162,11 +181,13 @@ impl SubstrateClient {
             .ok_or(CliError::SubstrateEndpoint)?)
     }
 
+    /// Create an unsigned Subxt client.
     pub async fn get_unsigned_substrate(&self) -> AnyResult<SubUnsignedClient<MainnetConfig>> {
         let sub = SubUnsignedClient::new(self.get_url()?).await?;
         Ok(sub)
     }
 
+    /// Create a signed Subxt client for submitting extrinsics.
     pub async fn get_signed_substrate(&self) -> AnyResult<SubSignedClient<MainnetConfig>> {
         let sub = self
             .get_unsigned_substrate()
@@ -180,6 +201,7 @@ impl SubstrateClient {
     }
 }
 
+/// Reusable parameters and helpers for connecting to a Parachain node.
 #[derive(Args, Debug, Clone)]
 pub struct ParachainClient {
     #[clap(from_global)]
@@ -225,6 +247,7 @@ impl ParachainClient {
     }
 }
 
+/// Reusable parameters and helpers for connecting to an EVM node.
 #[derive(Args, Debug, Clone)]
 pub struct EthereumClient {
     #[clap(from_global)]
@@ -238,6 +261,7 @@ pub struct EthereumClient {
 }
 
 impl EthereumClient {
+    /// Get signer private key as a hex string from flags or a file.
     pub fn get_key_string(&self) -> AnyResult<String> {
         match (&self.ethereum_key, &self.ethereum_key_file) {
             (Some(_), Some(_)) => Err(CliError::BothKeyTypesProvided.into()),
@@ -247,6 +271,7 @@ impl EthereumClient {
         }
     }
 
+    /// Return the WS/HTTP URL to connect to.
     pub fn get_url(&self) -> AnyResult<Url> {
         Ok(self
             .ethereum_url
@@ -254,11 +279,13 @@ impl EthereumClient {
             .ok_or(CliError::EthereumEndpoint)?)
     }
 
+    /// Create an unsigned ethers Provider (reads only).
     pub async fn get_unsigned_ethereum(&self) -> AnyResult<EthUnsignedClient> {
         let eth = EthUnsignedClient::new(self.get_url()?).await?;
         Ok(eth)
     }
 
+    /// Create a signed ethers client (used for sending transactions).
     pub async fn get_signed_ethereum(&self) -> AnyResult<EthSignedClient> {
         let eth = self
             .get_unsigned_ethereum()
@@ -272,6 +299,7 @@ impl EthereumClient {
     }
 }
 
+/// Reusable parameters and helpers for connecting to the Liberland chain.
 #[derive(Args, Debug, Clone)]
 pub struct LiberlandClient {
     #[clap(from_global)]

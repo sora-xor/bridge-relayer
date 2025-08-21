@@ -28,6 +28,13 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Runtime relayers and helpers.
+//!
+//! Modules:
+//! - `ethereum`: imports EVM headers into SORA using Ethash proofs
+//! - `ethereum_messages`: relays channel messages from EVM → SORA
+//! - `parachain` and `parachain_messages`: BEEFY-based relays between SORA and parachains
+//! - `multisig_messages` / `justification` / `beefy_syncer`: supporting components
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
 

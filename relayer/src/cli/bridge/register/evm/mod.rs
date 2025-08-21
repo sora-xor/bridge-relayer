@@ -28,6 +28,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! EVM-side bridge maintenance commands.
+//!
+//! Owner-only actions for resetting on-chain state in the EVM contracts (BEEFY,
+//! channels) to match SORA when recovering or resynchronizing environments.
+
 mod beefy;
 mod channels;
 

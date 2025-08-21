@@ -28,6 +28,10 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! EVM → SORA relay commands.
+//!
+//! Entry point for running the EVM header and message relay towards SORA.
+
 mod sora;
 
 use crate::cli::prelude::*;

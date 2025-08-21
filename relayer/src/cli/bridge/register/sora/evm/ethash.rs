@@ -28,10 +28,16 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Register EVM Ethash light client on SORA (sudo).
+//!
+//! Select a known network (or supply a custom config), pick a finalized block,
+//! then call SORA to register initial header and network parameters.
+
 use crate::cli::prelude::*;
 use crate::ethereum::make_header;
 use substrate_gen::runtime;
 
+/// Register the Ethash light client for the current EVM chain.
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
@@ -46,6 +52,7 @@ pub(crate) struct Command {
 }
 
 impl Command {
+    /// Execute light client registration if not already registered.
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_unsigned_ethereum().await?;
         let sub = self.sub.get_signed_substrate().await?;

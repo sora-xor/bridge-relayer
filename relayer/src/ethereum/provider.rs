@@ -28,12 +28,19 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Scheme-agnostic JSON-RPC client for ethers.
+//!
+//! `UniversalClient` bridges both WebSocket (ws/wss) and HTTP (http/https)
+//! transports under a single type that implements `JsonRpcClient`.
+//! This allows selecting the transport by URL scheme at runtime.
+
 pub use ethers::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
 use url::Url;
 
+/// Wraps either a WS or HTTP ethers client.
 #[derive(Clone, Debug)]
 pub enum UniversalClient {
     Ws(Ws),
@@ -75,6 +82,7 @@ impl ethers::providers::RpcError for UniversalClientError {
 }
 
 #[async_trait::async_trait]
+#[async_trait::async_trait]
 impl JsonRpcClient for UniversalClient {
     type Error = UniversalClientError;
 
@@ -96,6 +104,7 @@ impl JsonRpcClient for UniversalClient {
 }
 
 impl UniversalClient {
+    /// Create a client from a URL, choosing WS or HTTP based on the scheme.
     pub async fn new(url: Url) -> Result<Self, UniversalClientError> {
         match url.scheme() {
             "ws" | "wss" => Ok(UniversalClient::Ws(Ws::connect(url).await?)),
