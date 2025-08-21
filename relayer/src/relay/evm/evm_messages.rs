@@ -38,8 +38,10 @@ use crate::prelude::*;
 use crate::substrate::UnboundedGenericCommitment;
 use ethers::prelude::*;
 
+/// How far back to scan for reset events when initializing.
 const BLOCKS_TO_INITIAL_SEARCH: u64 = 49000; // Ethereum light client keep 50000 blocks
 
+/// Consumes EVM channel events and submits inbound commitments to Substrate.
 pub struct SubstrateMessagesRelay {
     sub: SubUnsignedClient<MainnetConfig>,
     eth: EthUnsignedClient,
@@ -51,6 +53,7 @@ pub struct SubstrateMessagesRelay {
 }
 
 impl SubstrateMessagesRelay {
+    /// Create a relay from Substrate/EVM clients and relayer ECDSA key.
     pub async fn new(
         sub: SubUnsignedClient<MainnetConfig>,
         eth: EthUnsignedClient,
@@ -82,6 +85,7 @@ impl SubstrateMessagesRelay {
         })
     }
 
+    /// Handle all pending channel events up to the current finalized block.
     pub async fn handle_messages(&mut self) -> AnyResult<()> {
         let current_eth_block = self.eth.get_finalized_block_number().await?;
         if current_eth_block < self.latest_channel_block {
@@ -97,6 +101,7 @@ impl SubstrateMessagesRelay {
         Ok(())
     }
 
+    /// Periodically submit EVM base fee updates to Substrate.
     async fn handle_base_fee_update(&mut self, current_eth_block: u64) -> AnyResult<()> {
         let GenericNetworkId::EVM(chain_id) = self.evm_network_id else {
             unreachable!()
@@ -141,6 +146,7 @@ impl SubstrateMessagesRelay {
         Ok(())
     }
 
+    /// Submit inbound message commitments from `MessageDispatched` events.
     async fn handle_message_events(&mut self, current_eth_block: u64) -> AnyResult<()> {
         let eth = self.eth.inner();
         let channel = ethereum_gen::ChannelHandler::new(self.channel, eth.clone());
@@ -200,6 +206,7 @@ impl SubstrateMessagesRelay {
         Ok(())
     }
 
+    /// Submit status reports from `BatchDispatched` events.
     async fn handle_batch_dispatched(&mut self, current_eth_block: u64) -> AnyResult<()> {
         let eth = self.eth.inner();
         let inbound_channel = ethereum_gen::ChannelHandler::new(self.channel, eth.clone());
@@ -267,6 +274,7 @@ impl SubstrateMessagesRelay {
         Ok(())
     }
 
+    /// Main loop: bootstrap latest reset and then poll every 10s.
     pub async fn run(mut self) -> AnyResult<()> {
         let current_eth_block = self.eth.get_finalized_block_number().await?;
 

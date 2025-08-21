@@ -29,6 +29,8 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #![allow(clippy::too_many_arguments)]
 
+//! Subxt-generated Liberland runtime bindings used by the relayer.
+
 pub type MaxU32 = sp_runtime::traits::ConstU32<{ u32::MAX }>;
 pub type UnboundedBridgeMessage = bridge_types::substrate::BridgeMessage<MaxU32>;
 pub type UnboundedGenericCommitment = bridge_types::GenericCommitment<MaxU32, MaxU32>;

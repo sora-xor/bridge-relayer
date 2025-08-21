@@ -28,6 +28,12 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Bridge Relayer binary entrypoint.
+//!
+//! This crate wires together CLI commands, typed clients for Substrate/EVM/TON,
+//! and the relay logic that submits commitments and messages between networks.
+//! See `cli` for the command surface and `relay` for core flows.
+
 mod cli;
 mod ethereum;
 mod relay;
@@ -53,6 +59,7 @@ async fn main() -> AnyResult<()> {
     Ok(())
 }
 
+/// Initialize logging from `RUST_LOG` or default to `info`.
 fn init_log() {
     if std::env::var_os("RUST_LOG").is_none() {
         env_logger::builder().parse_filters("info").init();

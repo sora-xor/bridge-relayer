@@ -32,6 +32,8 @@ pub mod contracts;
 pub mod types;
 pub mod wallet;
 
+//! Minimal TON API client and wallet helpers used by the relayer.
+
 use crate::prelude::*;
 use num_bigint::BigUint;
 use serde::de::DeserializeOwned;
@@ -52,6 +54,7 @@ use types::*;
 use url::Url;
 use wallet::*;
 
+/// Lightweight HTTP client for TON API endpoints used by the relayer.
 #[derive(Clone)]
 pub struct TonClient {
     client: reqwest::Client,
@@ -59,6 +62,7 @@ pub struct TonClient {
 }
 
 impl TonClient {
+    /// Construct a client using a base URL and optional `X-API-Key` header.
     pub fn new(base: Url, api_key: Option<String>) -> AnyResult<Self> {
         let mut headers = http::HeaderMap::new();
         if let Some(api_key) = api_key {
@@ -72,6 +76,7 @@ impl TonClient {
         })
     }
 
+    /// Send a POST request to a TON API method with a JSON body.
     pub async fn post_request<T: DeserializeOwned, B: Serialize>(
         &self,
         method: &str,
@@ -102,6 +107,7 @@ impl TonClient {
         }
     }
 
+    /// Send a GET request to a TON API method with query parameters.
     pub async fn get_request<T: DeserializeOwned>(
         &self,
         method: &str,
@@ -134,6 +140,7 @@ impl TonClient {
         }
     }
 
+    /// Fetch transactions for an address, optionally paginating via `last_tx`.
     pub async fn get_transactions(
         &self,
         address: toner::ton::MsgAddress,
@@ -162,6 +169,7 @@ impl TonClient {
         self.get_request("getTransactions", &query).await
     }
 
+    /// Call a get-method on a contract, passing a serialized stack.
     pub async fn run_get_method(
         &self,
         address: MsgAddress,
@@ -181,18 +189,21 @@ impl TonClient {
         .await
     }
 
+    /// Submit a BOC and return its hash.
     pub async fn send_boc_return_hash(&self, boc: Vec<u8>) -> AnyResult<SendBocResultHash> {
         self.post_request("sendBocReturnHash", &SendBoc { boc })
             .await
     }
 }
 
+/// TON client with a local wallet used to sign and send messages.
 pub struct SignedTonClient {
     client: TonClient,
     wallet: TonWallet,
 }
 
 impl SignedTonClient {
+    /// Construct a signed client from a TON client and wallet.
     pub fn new(client: TonClient, wallet: TonWallet) -> Self {
         Self { client, wallet }
     }

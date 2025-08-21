@@ -39,6 +39,7 @@ use crate::{prelude::*, substrate::BlockNumber};
 use bridge_common::simplified_proof::convert_to_simplified_mmr_proof;
 use sp_runtime::traits::{Keccak256, UniqueSaturatedInto};
 
+/// Outbound commitment together with auxiliary digest and simplified MMR proof.
 pub struct MessageCommitmentWithProof<S: SenderConfig> {
     pub offchain_data: GenericCommitmentWithBlockOf<S>,
     pub digest: AuxiliaryDigest,
@@ -46,6 +47,7 @@ pub struct MessageCommitmentWithProof<S: SenderConfig> {
     pub proof: bridge_common::simplified_proof::Proof<H256>,
 }
 
+/// Load and validate the auxiliary digest for a commitment at a specific block.
 pub async fn load_digest<S: SenderConfig>(
     sender: &SubUnsignedClient<S>,
     network_id: GenericNetworkId,
@@ -78,6 +80,7 @@ pub async fn load_digest<S: SenderConfig>(
     Ok(digest)
 }
 
+/// Load a commitment by nonce and derive the corresponding simplified MMR proof.
 pub async fn load_commitment_with_proof<S: SenderConfig>(
     sender: &SubUnsignedClient<S>,
     network_id: GenericNetworkId,
@@ -129,6 +132,7 @@ pub async fn load_commitment_with_proof<S: SenderConfig>(
     })
 }
 
+/// Find a leaf proof whose leaf_extra digest hash matches the given digest.
 async fn leaf_proof_with_digest<S: SenderConfig>(
     sender: &SubUnsignedClient<S>,
     digest_hash: H256,
@@ -141,6 +145,7 @@ async fn leaf_proof_with_digest<S: SenderConfig>(
         let leaf_proof = sender.mmr_generate_proof(leaf, at).await?;
         if leaf_proof.leaf.leaf_extra.digest_hash == digest_hash {
             return Ok(leaf_proof);
+//! Helpers to load commitments, digests and MMR proofs for message relays.
         }
     }
     return Err(anyhow::anyhow!("leaf proof not found"));

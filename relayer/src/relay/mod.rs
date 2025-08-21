@@ -30,6 +30,11 @@
 
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
+//! Core relay flows.
+//!
+//! This module groups concrete relayers: BEEFY justification syncer, Substrate ↔ EVM,
+//! Substrate ↔ TON, and Substrate ↔ Parachain message relays, plus helpers to
+//! build commitments with proofs.
 
 pub mod beefy_syncer;
 pub mod evm;

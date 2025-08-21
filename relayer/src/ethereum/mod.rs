@@ -30,6 +30,11 @@
 
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
+//! EVM client wrappers.
+//!
+//! Provides thin wrappers around ethers-rs `Provider` and signer middleware to
+//! unify HTTP and WS transports and to attach optional gas metric recording.
+//! Used by the relayer for EVM-side reads/writes and event subscriptions.
 pub mod provider;
 
 use crate::ethereum::provider::UniversalClient;
@@ -42,6 +47,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+/// Ethers signing wallet used by the relayer.
 pub type EthWallet = Wallet<SigningKey>;
 
 pub type SignedClientInner = SignerMiddleware<UnsignedClientInner, EthWallet>;
@@ -50,6 +56,7 @@ pub type UnsignedClientInner = Provider<UniversalClient>;
 
 pub type UnsignedOrSignedClient = Either<UnsignedClient, SignedClient>;
 
+/// Unsigned EVM RPC client backed by a `Provider<UniversalClient>`.
 #[derive(Clone, Debug)]
 pub struct UnsignedClient(Arc<UnsignedClientInner>);
 
@@ -61,12 +68,14 @@ impl Deref for UnsignedClient {
 }
 
 impl UnsignedClient {
+    /// Create a new unsigned provider from an HTTP/WS `url`.
     pub async fn new(url: Url) -> AnyResult<Self> {
         debug!("Connect to {}", url);
         let provider = Provider::new(UniversalClient::new(url).await?);
         Ok(Self(Arc::new(provider)))
     }
 
+    /// Attach a signer to this provider, returning a `SignedClient`.
     pub async fn signed(
         &self,
         key: SigningKey,
@@ -82,6 +91,7 @@ impl UnsignedClient {
         })
     }
 
+    /// Convenience constructor to attach a signer from a hex-encoded private key string.
     pub async fn sign_with_string(
         &self,
         key: &str,
@@ -96,6 +106,7 @@ impl UnsignedClient {
         self.0.clone()
     }
 
+    /// Return the current chain id as `bridge_types::EVMChainId`.
     pub async fn chainid(&self) -> AnyResult<EVMChainId> {
         let network_id = self.get_chainid().await?;
         let network_id: [u8; 32] = network_id.into();
@@ -103,6 +114,7 @@ impl UnsignedClient {
         Ok(network_id)
     }
 
+    /// Return the latest finalized block number from the EVM node.
     pub async fn get_finalized_block_number(&self) -> AnyResult<u64> {
         let block = self
             .get_block(ethers::types::BlockNumber::Finalized)
@@ -114,6 +126,7 @@ impl UnsignedClient {
     }
 }
 
+/// Signed EVM client with an attached wallet and optional gas metrics output.
 #[derive(Clone, Debug)]
 pub struct SignedClient {
     inner: Arc<SignedClientInner>,
@@ -128,6 +141,7 @@ impl Deref for SignedClient {
 }
 
 impl SignedClient {
+    /// Create a signed client from an HTTP/WS `url` and private key.
     pub async fn new(url: Url, key: SigningKey, gas_metrics: Option<PathBuf>) -> AnyResult<Self> {
         debug!("Connect to {}", url);
         let provider =
@@ -142,6 +156,7 @@ impl SignedClient {
         })
     }
 
+    /// Get an `UnsignedClient` view of this client.
     pub fn unsigned(&self) -> UnsignedClient {
         UnsignedClient(Arc::new(self.inner.inner().clone()))
     }
@@ -150,10 +165,12 @@ impl SignedClient {
         self.inner.clone()
     }
 
+    /// Return the chain id (delegates to the unsigned provider).
     pub async fn chainid(&self) -> AnyResult<EVMChainId> {
         self.unsigned().chainid().await
     }
 
+    /// Estimate gas for `call` and optionally append it to the `gas_metrics` file.
     pub async fn save_gas_price<D, M>(
         &self,
         call: &ContractCall<M, D>,

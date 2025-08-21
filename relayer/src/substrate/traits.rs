@@ -29,15 +29,19 @@ use super::{BlockNumberOrHash, GenericCommitmentWithBlockOf, UnboundedGenericCom
 
 pub type KeyPair = sp_core::sr25519::Pair;
 
+/// Marker type for Parachain runtime configuration.
 #[derive(Clone, Copy, Debug)]
 pub struct ParachainConfig;
 
+/// Marker type for SORA Mainnet runtime configuration.
 #[derive(Clone, Copy, Debug)]
 pub struct MainnetConfig;
 
+/// Marker type for Liberland runtime configuration.
 #[derive(Clone, Copy, Debug)]
 pub struct LiberlandConfig;
 
+/// Common extension describing chain-specific associated types and parameters.
 pub trait ConfigExt: Clone + core::fmt::Debug {
     type Config: subxt::Config + Clone;
     type Event: Decode + core::fmt::Debug + Send + Sync + 'static;
@@ -69,6 +73,8 @@ pub trait ConfigExt: Clone + core::fmt::Debug {
     fn average_block_time() -> Duration;
 }
 
+/// Substrate-side sender (outbound) configuration.
+/// Provides storage addresses and calls used to read/submit outbound commitments.
 pub trait SenderConfig: ConfigExt + 'static {
     type SubmitSignature: Encode;
 
@@ -112,6 +118,9 @@ pub trait SenderConfig: ConfigExt + 'static {
     ) -> StaticTxPayload<Self::SubmitSignature>;
 }
 
+/// Substrate-side receiver (inbound) configuration.
+/// Provides submission calls for signature commitments and message commitments,
+/// along with storage locations used during verification.
 pub trait ReceiverConfig: ConfigExt {
     type SubmitSignatureCommitment: Encode;
     type SubmitMessagesCommitment: Encode;

@@ -29,3 +29,4 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 pub mod ton_messages;
+//! TON-related relayers.

@@ -38,6 +38,7 @@ use crate::prelude::*;
 use crate::substrate::{BlockNumber, BlockNumberOrHash, OtherParams};
 use bridge_types::{GenericNetworkId, SubNetworkId};
 
+/// Builder for Substrate ↔ Parachain message relay using BEEFY proofs.
 pub struct RelayBuilder<S: SenderConfig, R: ReceiverConfig> {
     sender: Option<SubUnsignedClient<S>>,
     receiver: Option<SubUnsignedClient<R>>,
@@ -59,6 +60,7 @@ where
     S: SenderConfig,
     R: ReceiverConfig,
 {
+    /// Create a default builder.
     pub fn new() -> Self {
         Default::default()
     }
@@ -78,6 +80,7 @@ where
         self
     }
 
+    /// Finalize the builder and return a `Relay` instance.
     pub async fn build(self) -> AnyResult<Relay<S, R>> {
         let sender = self.sender.expect("sender client is needed");
         let receiver = self.receiver.expect("receiver client is needed");
@@ -107,6 +110,7 @@ where
     }
 }
 
+/// Substrate ↔ Parachain message relay using BEEFY proofs.
 #[derive(Clone)]
 pub struct Relay<S: SenderConfig, R: ReceiverConfig> {
     sender: SubUnsignedClient<S>,
@@ -123,6 +127,7 @@ where
     R: ReceiverConfig,
     OtherParams<R>: Default,
 {
+    /// Build proof for a batch `nonce` and submit it to the receiver chain.
     async fn send_commitment(&self, batch_nonce: u64) -> AnyResult<()> {
         info!("Sending channel commitment with nonce {:?}", batch_nonce);
         let latest_sent = self.syncer.latest_sent();
@@ -154,12 +159,14 @@ where
         Ok(())
     }
 
+    /// Current inbound channel nonce on receiver chain.
     async fn inbound_channel_nonce(&self) -> AnyResult<u64> {
         let storage = R::substrate_bridge_inbound_nonce(self.sender_network_id);
         let nonce = self.receiver.storage_fetch_or_default(&storage, ()).await?;
         Ok(nonce)
     }
 
+    /// Current outbound channel nonce on sender chain.
     async fn outbound_channel_nonce(&self) -> AnyResult<u64> {
         let nonce = self
             .sender
@@ -171,6 +178,7 @@ where
         Ok(nonce)
     }
 
+    /// Periodic loop that detects new batches and relays them.
     pub async fn run(mut self) -> AnyResult<()> {
         let mut interval = tokio::time::interval(S::average_block_time());
         loop {

@@ -28,6 +28,13 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! CLI surface for the bridge relayer.
+//!
+//! The CLI groups operations by domains: registering bridge components, relaying
+//! messages/commitments between networks, utility commands (BEEFY subscription,
+//! minting test tokens, copying liquidity). Global flags configure connections
+//! and keys for Substrate, Parachain, Liberland, EVM, and TON.
+
 mod bridge;
 mod copy_liquidity;
 mod error;
@@ -43,7 +50,7 @@ pub use utils::*;
 use crate::prelude::*;
 use clap::*;
 
-/// Bridge relayer
+/// Bridge relayer CLI root.
 #[derive(Parser, Debug)]
 #[clap(version, author)]
 pub struct Cli {
@@ -109,6 +116,7 @@ pub struct Cli {
 }
 
 impl Cli {
+    /// Dispatch selected subcommand.
     pub async fn run(&self) -> AnyResult<()> {
         self.commands.run().await
     }
@@ -116,7 +124,7 @@ impl Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Subscribe beefy to new commitments
+    /// Subscribe to BEEFY justifications and new commitments
     SubscribeBeefy(subscribe_beefy::Command),
     /// Mint test token (work for tokens with mint method)
     MintTestToken(mint_test_token::Command),

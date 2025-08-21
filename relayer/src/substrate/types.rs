@@ -27,6 +27,7 @@
 // OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//! Common type aliases and utilities for Substrate clients.
 
 use crate::prelude::*;
 use bridge_types::types::LeafExtraData;
@@ -69,6 +70,7 @@ pub type UnboundedGenericCommitment = bridge_types::GenericCommitment<MaxU32, Ma
 pub type GenericCommitmentWithBlockOf<T> =
     bridge_types::types::GenericCommitmentWithBlock<BlockNumber<T>, MaxU32, MaxU32>;
 
+/// MMR leaf proof and associated block hash.
 #[derive(Debug, Clone)]
 pub struct LeafProof<T: ConfigExt> {
     pub block_hash: BlockHash<T>,
@@ -76,6 +78,7 @@ pub struct LeafProof<T: ConfigExt> {
     pub proof: Proof<MmrHash>,
 }
 
+/// SCALE-encoded BEEFY commitment wrapper to defer decoding until needed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncodedBeefyCommitment(pub Bytes);
 
@@ -86,6 +89,7 @@ impl EncodedBeefyCommitment {
     }
 }
 
+/// Block specifier that can be a number, hash, best or finalized.
 #[derive(Debug, Clone, Copy)]
 pub enum BlockNumberOrHash {
     Number(u64),
@@ -118,6 +122,7 @@ impl From<H256> for BlockNumberOrHash {
     }
 }
 
+/// Wrapper that bypasses Subxt call/storage validation when addressing by name.
 pub struct Unvalidated<'a, P>(pub &'a P);
 
 impl<'a, P: TxPayload> TxPayload for Unvalidated<'a, P> {

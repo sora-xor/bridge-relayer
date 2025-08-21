@@ -30,6 +30,10 @@
 
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
+//! Build BEEFY justifications with MMR proofs.
+//!
+//! This module derives validator signatures, validator set, MMR leaf + simplified proof
+//! and packages them into a struct consumable by relayers.
 
 use crate::prelude::*;
 use crate::substrate::{BeefyCommitment, BeefySignedCommitment, LeafProof};
@@ -44,11 +48,13 @@ use sp_runtime::traits::{AtLeast32Bit, Keccak256, UniqueSaturatedInto};
 use sp_runtime::traits::{Convert, Hash as HashTrait};
 use sp_runtime::Saturating;
 
+/// Complete BEEFY justification and proof bundle for a specific block.
 #[derive(Debug)]
 pub struct MmrPayload {
     pub mmr_root: H256,
 }
 
+/// Collected inputs needed to verify a BEEFY commitment on target chains.
 #[derive(Debug)]
 pub struct BeefyJustification<T: ConfigExt> {
     pub commitment: BeefyCommitment<T>,

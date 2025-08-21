@@ -45,6 +45,7 @@ use sp_runtime::traits::UniqueSaturatedInto;
 use subxt::rpc_params;
 use subxt::tx::TxPayload;
 
+/// Builder for Substrate → Substrate (BEEFY) signature commitment relay.
 pub struct RelayBuilder<S: SenderConfig, R: ReceiverConfig> {
     sender: Option<SubUnsignedClient<S>>,
     receiver: Option<SubSignedClient<R>>,
@@ -66,6 +67,7 @@ where
     S: SenderConfig,
     R: ReceiverConfig,
 {
+    /// Create a default builder.
     pub fn new() -> Self {
         Default::default()
     }
@@ -85,6 +87,7 @@ where
         self
     }
 
+    /// Finalize the builder and return a `Relay` instance.
     pub async fn build(self) -> AnyResult<Relay<S, R>> {
         let sender = self.sender.expect("sender client is needed");
         let receiver = self.receiver.expect("receiver client is needed");
@@ -110,6 +113,7 @@ where
     }
 }
 
+/// Substrate → Substrate (BEEFY) signature commitment relay.
 #[derive(Clone)]
 pub struct Relay<S: SenderConfig, R: ReceiverConfig> {
     sender: SubUnsignedClient<S>,
@@ -126,6 +130,7 @@ where
     R: ReceiverConfig,
     OtherParams<R>: Default,
 {
+    /// Ask the receiver to randomize the initial bitfield for anti-censorship.
     async fn create_random_bitfield(
         &self,
         initial_bitfield: BitField,
@@ -141,6 +146,7 @@ where
         Ok(random_bitfield)
     }
 
+    /// Prepare the `submit_signature_commitment` call with validator proof and MMR data.
     async fn submit_signature_commitment(
         &self,
         justification: &BeefyJustification<S>,
@@ -176,6 +182,7 @@ where
         Ok(call)
     }
 
+    /// Submit a BEEFY signature commitment and update syncer state.
     pub async fn send_commitment(self, justification: BeefyJustification<S>) -> AnyResult<()> {
         debug!("New justification: {:?}", justification);
         let call = self.submit_signature_commitment(&justification).await?;
@@ -185,6 +192,7 @@ where
         Ok(())
     }
 
+    /// Subscribe to justifications and send those that are required.
     pub async fn run(&self, ignore_unneeded_commitments: bool) -> AnyResult<()> {
         let mut beefy_sub = crate::substrate::beefy_subscription::subscribe_beefy_justifications(
             self.sender.clone(),

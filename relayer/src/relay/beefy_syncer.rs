@@ -33,6 +33,7 @@ use std::sync::{
     Arc,
 };
 
+/// Tracks the latest requested and sent BEEFY blocks to coordinate relays.
 #[derive(Clone)]
 pub struct BeefySyncer {
     latest_requested: Arc<AtomicU64>,
@@ -40,6 +41,7 @@ pub struct BeefySyncer {
 }
 
 impl BeefySyncer {
+    /// Create a new syncer with zeroed counters.
     pub fn new() -> Self {
         Self {
             latest_requested: Default::default(),
@@ -47,15 +49,18 @@ impl BeefySyncer {
         }
     }
 
+    /// The highest BEEFY block we've requested processing for.
     pub fn latest_requested(&self) -> u64 {
         self.latest_requested.load(Ordering::Relaxed)
     }
 
+    /// The highest BEEFY block we've successfully relayed.
     pub fn latest_sent(&self) -> u64 {
         self.latest_sent.load(Ordering::Relaxed)
     }
 
     #[allow(dead_code)]
+    /// Atomically raise the latest requested block if `block` is greater.
     pub fn update_latest_requested(&self, block: u64) {
         self.latest_requested
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
@@ -69,6 +74,7 @@ impl BeefySyncer {
             .ok();
     }
 
+    /// Atomically raise the latest sent block if `block` is greater.
     pub fn update_latest_sent(&self, block: u64) {
         self.latest_sent
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
