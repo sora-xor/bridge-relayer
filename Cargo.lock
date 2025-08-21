@@ -396,6 +396,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "155a5a185e42c6b77ac7b88a15143d930a9e9727a5b7b77eed417404ab15c247"
 
 [[package]]
+name = "assert_cmd"
+version = "2.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bd389a4b2970a01282ee455294913c0a43724daedcd1a24c3eb0ec1c1320b66"
+dependencies = [
+ "anstyle",
+ "bstr",
+ "doc-comment",
+ "libc",
+ "predicates 3.1.3",
+ "predicates-core",
+ "predicates-tree",
+ "wait-timeout",
+]
+
+[[package]]
 name = "assets-rpc"
 version = "0.1.0"
 source = "git+https://github.com/sora-xor//sora2-network.git?tag=3.4.0#47a7f6d7dbe663d31d686d961786cfc9d239bf85"
@@ -877,6 +893,7 @@ name = "bridge-relayer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_cmd",
  "assets-rpc",
  "assets-runtime-api",
  "async-trait",
@@ -916,6 +933,7 @@ dependencies = [
  "pallet-beefy-mmr",
  "parachain-gen",
  "parity-scale-codec",
+ "predicates 3.1.3",
  "rand 0.8.5",
  "rayon",
  "reqwest",
@@ -983,6 +1001,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a68f1f47cdf0ec8ee4b941b2eee2a80cb796db73118c0dd09ac63fbe405be22"
 dependencies = [
  "memchr",
+ "regex-automata 0.4.9",
  "serde",
 ]
 
@@ -1999,6 +2018,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "doc-comment"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
+
+[[package]]
 name = "downcast"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2831,6 +2856,15 @@ name = "float-cmp"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "float-cmp"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b09cf3155332e944990140d967ff5eceb70df778b34f77d8075db46e4704e6d8"
 dependencies = [
  "num-traits",
 ]
@@ -5092,7 +5126,7 @@ dependencies = [
  "fragile",
  "lazy_static",
  "mockall_derive",
- "predicates",
+ "predicates 2.1.5",
  "predicates-tree",
 ]
 
@@ -6199,8 +6233,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
 dependencies = [
  "difflib",
- "float-cmp",
+ "float-cmp 0.9.0",
  "itertools",
+ "normalize-line-endings",
+ "predicates-core",
+ "regex",
+]
+
+[[package]]
+name = "predicates"
+version = "3.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d19ee57562043d37e82899fade9a22ebab7be9cef5026b07fda9cdd4293573"
+dependencies = [
+ "anstyle",
+ "difflib",
+ "float-cmp 0.10.0",
  "normalize-line-endings",
  "predicates-core",
  "regex",
@@ -9887,6 +9935,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
+name = "wait-timeout"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "waitgroup"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11162,11 +11219,11 @@ version = "4.0.0-dev"
 source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
 
 [[patch.unused]]
-name = "orml-tokens"
-version = "0.4.1-dev"
-source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v0.9.38#241d5cdc98cca53b8cf990853943c9ae1193a70e"
-
-[[patch.unused]]
 name = "pallet-scheduler"
 version = "4.0.0-dev"
 source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "orml-tokens"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v0.9.38#241d5cdc98cca53b8cf990853943c9ae1193a70e"

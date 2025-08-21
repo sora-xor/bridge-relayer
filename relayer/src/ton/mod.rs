@@ -28,11 +28,10 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+// Minimal TON API client and wallet helpers used by the relayer.
 pub mod contracts;
 pub mod types;
 pub mod wallet;
-
-//! Minimal TON API client and wallet helpers used by the relayer.
 
 use crate::prelude::*;
 use num_bigint::BigUint;

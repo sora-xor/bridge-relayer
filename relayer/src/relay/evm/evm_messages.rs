@@ -239,21 +239,16 @@ impl SubstrateMessagesRelay {
         for (event, meta) in events {
             if event.batch_nonce.as_u64() == sub_reported_nonce + 1 && meta.address == self.channel
             {
-                let mut results = vec![];
-                for i in 0..event.results_length.as_usize() {
-                    if event.results.bit(i) {
-                        results.push(true);
-                    } else {
-                        results.push(false);
-                    }
-                }
+                let results = Self::results_bitmap_to_vec(event.results, event.results_length.as_usize());
                 let commitment = UnboundedGenericCommitment::EVM(
                     bridge_types::evm::Commitment::StatusReport(StatusReport {
                         nonce: event.batch_nonce.as_u64(),
                         base_fee: event.base_fee,
                         gas_spent: event.gas_spent,
                         relayer: event.relayer,
-                        results: results.try_into().unwrap(),
+                        results: results
+                            .try_into()
+                            .map_err(|_| anyhow::anyhow!("Invalid results length"))?,
                         channel: meta.address,
                         block_number: meta.block_number.as_u64(),
                     }),
@@ -272,6 +267,15 @@ impl SubstrateMessagesRelay {
         }
 
         Ok(())
+    }
+
+    /// Convert a bitmap of results (U256) with a given length into Vec<bool>.
+    fn results_bitmap_to_vec(bitmap: U256, len: usize) -> Vec<bool> {
+        let mut out = Vec::with_capacity(len);
+        for i in 0..len {
+            out.push(bitmap.bit(i));
+        }
+        out
     }
 
     /// Main loop: bootstrap latest reset and then poll every 10s.
@@ -298,5 +302,24 @@ impl SubstrateMessagesRelay {
             }
             tokio::time::sleep(Duration::from_secs(10)).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_results_bitmap_to_vec() {
+        // 0b1011 => [1,1,0,1]
+        let bm = U256::from(0b1011u64);
+        let v = SubstrateMessagesRelay::results_bitmap_to_vec(bm, 4);
+        assert_eq!(v, vec![true, true, false, true]);
+
+        // length truncates/extends view
+        let v2 = SubstrateMessagesRelay::results_bitmap_to_vec(bm, 2);
+        assert_eq!(v2, vec![true, true]);
+        let v3 = SubstrateMessagesRelay::results_bitmap_to_vec(bm, 6);
+        assert_eq!(v3, vec![true, true, false, true, false, false]);
     }
 }

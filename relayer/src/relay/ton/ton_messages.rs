@@ -221,25 +221,89 @@ impl Relay {
     }
 
     pub async fn run(self) -> AnyResult<()> {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+        let mut backoff_secs: u64 = 1;
+        let max_backoff: u64 = 30;
+        let tick = std::time::Duration::from_secs(10);
         loop {
-            interval.tick().await;
-            let mut sub_nonce = self.sub_nonce().await?;
-            let ton_nonce = self.ton_nonce().await?;
-            info!("Nonces - TON: {}, SORA: {}", ton_nonce, sub_nonce);
-            if ton_nonce > sub_nonce {
-                let mut found_messages = BTreeMap::new();
-                for message in self.messages().await? {
-                    found_messages.insert(message.nonce(), message);
+            if backoff_secs > 1 {
+                debug!("retrying after {}s", backoff_secs);
+                tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
+            } else {
+                tokio::time::sleep(tick).await;
+            }
+
+            let res: AnyResult<()> = async {
+                let mut sub_nonce = self.sub_nonce().await?;
+                let ton_nonce = self.ton_nonce().await?;
+                info!("Nonces - TON: {}, SORA: {}", ton_nonce, sub_nonce);
+                if ton_nonce > sub_nonce {
+                    let mut found_messages = BTreeMap::new();
+                    for message in self.messages().await? {
+                        found_messages.insert(message.nonce(), message);
+                    }
+                    while sub_nonce < ton_nonce {
+                        sub_nonce += 1;
+                        let message = found_messages.remove(&sub_nonce).ok_or(anyhow!(
+                            "Internal error: Message with nonce {sub_nonce} not found"
+                        ))?;
+                        self.send(message).await?;
+                    }
                 }
-                while sub_nonce < ton_nonce {
-                    sub_nonce += 1;
-                    let message = found_messages.remove(&sub_nonce).ok_or(anyhow!(
-                        "Internal error: Message with nonce {sub_nonce} not found"
-                    ))?;
-                    self.send(message).await?;
+                Ok(())
+            }
+            .await;
+
+            match res {
+                Ok(()) => backoff_secs = 1,
+                Err(e) => {
+                    warn!(
+                        "TON->Substrate relay iteration failed (will retry with backoff): {:?}",
+                        e
+                    );
+                    backoff_secs = (backoff_secs.saturating_mul(2)).min(max_backoff);
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Pure helper to validate selection logic similar to run():
+    // given available messages keyed by nonce and desired range (sub_nonce+1..=ton_nonce),
+    // select them in order or return an error if any are missing.
+    fn select_messages(
+        mut available: BTreeMap<u64, u64>,
+        mut sub_nonce: u64,
+        ton_nonce: u64,
+    ) -> Result<Vec<u64>, String> {
+        let mut selected = vec![];
+        if ton_nonce <= sub_nonce {
+            return Ok(selected);
+        }
+        while sub_nonce < ton_nonce {
+            sub_nonce += 1;
+            let msg = available
+                .remove(&sub_nonce)
+                .ok_or_else(|| format!("missing nonce {}", sub_nonce))?;
+            selected.push(msg);
+        }
+        Ok(selected)
+    }
+
+    #[test]
+    fn test_select_messages_ok() {
+        let available = BTreeMap::from([(1, 10u64), (2, 20), (3, 30)]);
+        let sel = select_messages(available, 0, 3).expect("ok");
+        assert_eq!(sel, vec![10, 20, 30]);
+    }
+
+    #[test]
+    fn test_select_messages_missing() {
+        let available = BTreeMap::from([(1, 10u64), (3, 30)]);
+        let err = select_messages(available, 0, 3).unwrap_err();
+        assert!(err.contains("missing nonce 2"));
     }
 }

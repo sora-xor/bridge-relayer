@@ -204,10 +204,13 @@ where
             let latest_requested = self.syncer.latest_requested();
             let latest_sent = self.syncer.latest_sent();
             let is_mandatory = justification.is_mandatory;
-            let should_send = !ignore_unneeded_commitments
-                || is_mandatory
-                || (latest_requested < justification.commitment.block_number.into()
-                    && latest_sent < latest_requested);
+            let should_send = should_send_commitment(
+                ignore_unneeded_commitments,
+                is_mandatory,
+                latest_requested,
+                latest_sent,
+                justification.commitment.block_number.into(),
+            );
 
             if should_send {
                 // TODO: Better async message handler
@@ -242,5 +245,41 @@ where
         }
 
         Ok(())
+    }
+}
+
+#[inline]
+fn should_send_commitment(
+    ignore_unneeded: bool,
+    is_mandatory: bool,
+    latest_requested: u64,
+    latest_sent: u64,
+    commitment_block: u64,
+) -> bool {
+    if ignore_unneeded {
+        // Only send if mandatory, or it's a new request we haven't satisfied.
+        is_mandatory
+            || (latest_requested < commitment_block && latest_sent < latest_requested)
+    } else {
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_send_commitment;
+
+    #[test]
+    fn test_should_send_commitment_cases() {
+        // ignore==false: always send
+        assert!(should_send_commitment(false, false, 10, 10, 11));
+        // mandatory always sends regardless
+        assert!(should_send_commitment(true, true, 10, 10, 10));
+        // already satisfied -> do not send
+        assert!(!should_send_commitment(true, false, 20, 20, 10));
+        // send when requested < commitment and latest_sent < latest_requested
+        assert!(should_send_commitment(true, false, 10, 5, 15));
+        // do not send when already satisfied (latest_sent >= latest_requested)
+        assert!(!should_send_commitment(true, false, 10, 10, 15));
     }
 }

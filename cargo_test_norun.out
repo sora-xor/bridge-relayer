@@ -1,0 +1,133 @@
+warning: Patch `pallet-scheduler v4.0.0-dev (https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81)` was not used in the crate graph.
+Patch `pallet-scheduler v4.0.0-dev (https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81)` was not used in the crate graph.
+Patch `orml-tokens v0.4.1-dev (https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v0.9.38#241d5cdc)` was not used in the crate graph.
+Check that the patched package version and available features are compatible
+with the dependency requirements. If the patch has a different version from
+what is locked in the Cargo.lock file, run `cargo update` to use the new
+version. This may also occur with an optional dependency that is not enabled.
+   Compiling bridge-relayer v0.1.0 (/Users/mtakemiya/dev/bridge-relayer/relayer)
+warning: unused import: `contracts::channel::SendInboundMessage`
+  --> relayer/src/relay/ton/sub_messages.rs:41:18
+   |
+41 | use crate::ton::{contracts::channel::SendInboundMessage, SignedTonClient, TonClient};
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated function `pending_nonces` is never used
+   --> relayer/src/relay/evm/sub_messages.rs:234:8
+    |
+129 | impl Relay {
+    | ---------- associated function in this implementation
+...
+234 |     fn pending_nonces(inbound_nonce: u64, outbound_nonce: u64) -> Vec<u64> {
+    |        ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `ton`, `sub_network_id`, `value`, and `bounce` are never read
+   --> relayer/src/relay/ton/sub_messages.rs:151:5
+    |
+149 | pub struct Relay {
+    |            ----- fields in this struct
+150 |     sub: SubUnsignedClient<MainnetConfig>,
+151 |     ton: SignedTonClient,
+    |     ^^^
+...
+154 |     sub_network_id: GenericNetworkId,
+    |     ^^^^^^^^^^^^^^
+155 |     ton_network_id: GenericNetworkId,
+156 |     value: BigUint,
+    |     ^^^^^
+157 |     bounce: bool,
+    |     ^^^^^^
+
+warning: associated function `decode_cell_from_payload_base64` is never used
+   --> relayer/src/relay/ton/sub_messages.rs:170:8
+    |
+160 | impl Relay {
+    | ---------- associated function in this implementation
+...
+170 |     fn decode_cell_from_payload_base64(payload: &[u8]) -> AnyResult<toner::tlb::Cell> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `SendOutboundMessage` is never constructed
+  --> relayer/src/ton/contracts/channel.rs:83:12
+   |
+83 | pub struct SendOutboundMessage {
+   |            ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SEND_OUTBOUND_MESSAGE_ID` is never used
+  --> relayer/src/ton/contracts/channel.rs:88:11
+   |
+88 | pub const SEND_OUTBOUND_MESSAGE_ID: u32 = 0x432df181;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `SendInboundMessage` is never constructed
+   --> relayer/src/ton/contracts/channel.rs:118:12
+    |
+118 | pub struct SendInboundMessage {
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: constant `SEND_INBOUND_MESSAGE_ID` is never used
+   --> relayer/src/ton/contracts/channel.rs:123:11
+    |
+123 | pub const SEND_INBOUND_MESSAGE_ID: u32 = 0x44b1824c;
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `RegisterApp` is never constructed
+   --> relayer/src/ton/contracts/channel.rs:153:12
+    |
+153 | pub struct RegisterApp {
+    |            ^^^^^^^^^^^
+
+warning: constant `REGISTER_APP_ID` is never used
+   --> relayer/src/ton/contracts/channel.rs:157:11
+    |
+157 | pub const REGISTER_APP_ID: u32 = 0x267f9407;
+    |           ^^^^^^^^^^^^^^^
+
+warning: struct `Migrate` is never constructed
+  --> relayer/src/ton/contracts/ton_app.rs:80:12
+   |
+80 | pub struct Migrate {
+   |            ^^^^^^^
+
+warning: constant `MIGRATE_ID` is never used
+  --> relayer/src/ton/contracts/ton_app.rs:84:11
+   |
+84 | pub const MIGRATE_ID: u32 = 0x0485b71d;
+   |           ^^^^^^^^^^
+
+warning: struct `FullAccountState` is never constructed
+  --> relayer/src/ton/types.rs:30:12
+   |
+30 | pub struct FullAccountState {
+   |            ^^^^^^^^^^^^^^^^
+
+warning: `bridge-relayer` (bin "bridge-relayer") generated 13 warnings (1 duplicate)
+warning: fields `ton`, `sub_network_id`, `value`, and `bounce` are never read
+   --> relayer/src/relay/ton/sub_messages.rs:151:5
+    |
+149 | pub struct Relay {
+    |            ----- fields in this struct
+150 |     sub: SubUnsignedClient<MainnetConfig>,
+151 |     ton: SignedTonClient,
+    |     ^^^
+...
+154 |     sub_network_id: GenericNetworkId,
+    |     ^^^^^^^^^^^^^^
+155 |     ton_network_id: GenericNetworkId,
+156 |     value: BigUint,
+    |     ^^^^^
+157 |     bounce: bool,
+    |     ^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `bridge-relayer` (bin "bridge-relayer" test) generated 10 warnings (8 duplicates) (run `cargo fix --bin "bridge-relayer" --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.34s
+warning: the following packages contain code that will be rejected by a future version of Rust: nalgebra v0.27.1, subxt v0.25.0, trie-db v0.24.0
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+  Executable unittests src/main.rs (target/debug/deps/bridge_relayer-25581108b1c9dcdc)
+  Executable tests/cli_help.rs (target/debug/deps/cli_help-5fcf22b0e61ff767)

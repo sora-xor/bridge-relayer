@@ -40,8 +40,9 @@ This document summarizes what the workspace supports today, what’s partial, an
   - TON → Substrate: Implemented.
     - File: `relayer/src/relay/ton/ton_messages.rs`
     - Reads `outboundNonce` from TON channel, parses outbound msgs from TON transactions, and submits `InboundCommitment` (TON variant) to Substrate.
-  - Substrate → TON: Not implemented in relayer.
-    - There are TON channel/app TLB types and wallet support (`relayer/src/ton`), and CLI helpers for registration, but there is no relay loop implemented to read Substrate outbound TON commitments and send BOCs to TON.
+  - Substrate → TON: Partially implemented (blocked by runtime support).
+    - File: `relayer/src/relay/ton/sub_messages.rs`
+    - The relay loop scaffolding exists (clients, wallet, nonce comparison, backoff), but the SORA pallets do not emit TON outbound commitments yet. As of current `bridge_types`, `ton::Commitment` only has the `Inbound` variant, and the outbound channel pallet explicitly logs that “TON messages are not supported yet by this channel”. Once runtime adds TON outbound support, wire the send path to build `SendInboundMessage` cells and submit via the TON wallet.
 
 ## Chain-Specific Support Gaps
 
@@ -82,14 +83,21 @@ This document summarizes what the workspace supports today, what’s partial, an
 ## Known TODOs and Unfinished Work
 
 - General: Many modules carry `// TODO #167: fix clippy warnings`.
-- TON: Implement Substrate → TON relay loop that reads outbound TON commitments from Substrate and constructs/sends TON messages (BOC) to the channel contract.
+- TON: Outbound (Substrate → TON) requires runtime support. Relayer loop is scaffolded; enable actual message submission when pallets produce TON outbound commitments.
 - Liberland: BEEFY light client path is unimplemented; current flow uses multisig proofs only.
 - Parachain: Outbound to EVM/TON is unimplemented in `SenderConfig`.
 - Error handling and backoff in relayer loops could be expanded; some unimplemented! guards remain for unsupported directions.
+
+## Resilience/Backoff
+
+- Added simple exponential backoff in loops for:
+  - EVM (Substrate → EVM): `relayer/src/relay/evm/sub_messages.rs`
+  - TON (TON → Substrate): `relayer/src/relay/ton/ton_messages.rs`
+  - TON (Substrate → TON): `relayer/src/relay/ton/sub_messages.rs`
+  The loops now avoid tight retry on transient errors and log retry delays.
 
 ## How To Update This Document
 
 - After adding/altering a relay flow, registration logic, or supported network direction, update:
   - This `status.md` to reflect the new capabilities/limitations.
   - The relevant `AGENTS.md` sections if the architecture or interfaces changed significantly.
-

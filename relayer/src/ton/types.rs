@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use ethers::types::I256;
 use serde::ser::SerializeTuple;
 use serde_with::serde_as;

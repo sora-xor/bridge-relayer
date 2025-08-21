@@ -28,6 +28,8 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#![allow(dead_code)]
+
 use toner::{
     tlb::{
         bits::{de::BitReaderExt, integer::ConstU32, ser::BitWriterExt},
@@ -200,5 +202,52 @@ impl<'de> CellDeserialize<'de> for Reset {
     ) -> Result<Self, toner::tlb::de::CellParserError<'de>> {
         parser.unpack::<ConstU32<RESET_ID>>()?;
         Ok(Self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use toner::tlb::ser::{CellSerialize, CellSerializeExt};
+
+    #[test]
+    fn outbound_message_roundtrip() {
+        // build a dummy message cell
+        #[derive(Clone)]
+        struct Dummy;
+        impl CellSerialize for Dummy {
+            fn store(&self, b: &mut toner::tlb::ser::CellBuilder) -> Result<(), toner::tlb::ser::CellBuilderError> {
+                b.pack(0xabcdef01u32)?;
+                Ok(())
+            }
+        }
+        let msg = OutboundMessage {
+            nonce: 42,
+            message: Dummy.to_cell().unwrap(),
+            source: MsgAddress { workchain_id: 0, address: [1u8; 32] },
+        };
+        let cell = msg.to_cell().unwrap();
+        let parsed = OutboundMessage::parse(&mut cell.parser()).unwrap();
+        assert_eq!(parsed.nonce, 42);
+        assert_eq!(format!("{}", parsed.source), format!("{}", msg.source));
+    }
+
+    #[test]
+    fn send_inbound_message_roundtrip() {
+        #[derive(Clone)]
+        struct Dummy;
+        impl CellSerialize for Dummy {
+            fn store(&self, b: &mut toner::tlb::ser::CellBuilder) -> Result<(), toner::tlb::ser::CellBuilderError> {
+                b.pack(true)?;
+                Ok(())
+            }
+        }
+        let msg = SendInboundMessage {
+            target: MsgAddress { workchain_id: -1, address: [2u8; 32] },
+            message: Dummy.to_cell().unwrap(),
+        };
+        let cell = msg.to_cell().unwrap();
+        let parsed = SendInboundMessage::parse(&mut cell.parser()).unwrap();
+        assert_eq!(format!("{}", parsed.target), format!("{}", msg.target));
     }
 }

@@ -145,7 +145,6 @@ async fn leaf_proof_with_digest<S: SenderConfig>(
         let leaf_proof = sender.mmr_generate_proof(leaf, at).await?;
         if leaf_proof.leaf.leaf_extra.digest_hash == digest_hash {
             return Ok(leaf_proof);
-//! Helpers to load commitments, digests and MMR proofs for message relays.
         }
     }
     return Err(anyhow::anyhow!("leaf proof not found"));

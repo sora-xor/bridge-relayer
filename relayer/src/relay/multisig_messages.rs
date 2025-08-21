@@ -200,72 +200,131 @@ where
                 break;
             }
         }
-        let mut interval = tokio::time::interval(S::average_block_time());
+        let mut backoff_secs: u64 = 1;
+        let max_backoff: u64 = 30;
         loop {
-            interval.tick().await;
-            let inbound_nonce = self.inbound_channel_nonce().await?;
-            let outbound_nonce = self.outbound_channel_nonce().await?;
-            if inbound_nonce >= outbound_nonce {
-                if inbound_nonce > outbound_nonce {
-                    error!(
-                        "Inbound channel nonce is higher than outbound channel nonce: {} > {}",
-                        inbound_nonce, outbound_nonce
-                    );
-                }
-                continue;
+            if backoff_secs > 1 {
+                debug!("retrying after {}s", backoff_secs);
+                tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
+            } else {
+                tokio::time::sleep(S::average_block_time()).await;
             }
-            for nonce in (inbound_nonce + 1)..=outbound_nonce {
-                let offchain_data = self
-                    .sender
-                    .commitment_with_nonce(
+
+            let res: AnyResult<()> = async {
+                let inbound_nonce = self.inbound_channel_nonce().await?;
+                let outbound_nonce = self.outbound_channel_nonce().await?;
+                if inbound_nonce >= outbound_nonce {
+                    if inbound_nonce > outbound_nonce {
+                        error!(
+                            "Inbound channel nonce is higher than outbound channel nonce: {} > {}",
+                            inbound_nonce, outbound_nonce
+                        );
+                    }
+                    return Ok(());
+                }
+                for nonce in (inbound_nonce + 1)..=outbound_nonce {
+                    let offchain_data = self
+                        .sender
+                        .commitment_with_nonce(
+                            self.receiver_network_id.into(),
+                            nonce,
+                            BlockNumberOrHash::Finalized,
+                        )
+                        .await?;
+                    let commitment_hash = offchain_data.commitment.hash();
+                    let digest: AuxiliaryDigest = load_digest(
+                        &self.sender,
                         self.receiver_network_id.into(),
-                        nonce,
-                        BlockNumberOrHash::Finalized,
+                        offchain_data.block_number,
+                        commitment_hash,
                     )
                     .await?;
-                let commitment_hash = offchain_data.commitment.hash();
-                let digest: AuxiliaryDigest = load_digest(
-                    &self.sender,
-                    self.receiver_network_id.into(),
-                    offchain_data.block_number,
-                    commitment_hash,
-                )
-                .await?;
-                let digest_hash = Keccak256::hash_of(&digest);
-                trace!("Digest hash: {}", digest_hash);
-                let peers = self.receiver_peers().await?;
-                let approvals = self.approvals(digest_hash).await?;
-                let is_already_approved = approvals
-                    .iter()
-                    .filter_map(|approval| approval.recover_prehashed(&digest_hash.0))
-                    .any(|public| self.signer.public() == public);
-                if (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32)
-                    && !is_already_approved
-                {
-                    let signature = self.signer.sign_prehashed(&digest_hash.0);
-                    let call = S::submit_signature(
-                        self.receiver_network_id.into(),
-                        digest_hash,
-                        signature,
+                    let digest_hash = Keccak256::hash_of(&digest);
+                    trace!("Digest hash: {}", digest_hash);
+                    let peers = self.receiver_peers().await?;
+                    let approvals = self.approvals(digest_hash).await?;
+                    let is_already_approved = approvals
+                        .iter()
+                        .filter_map(|approval| approval.recover_prehashed(&digest_hash.0))
+                        .any(|public| self.signer.public() == public);
+                    if (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32)
+                        && !is_already_approved
+                    {
+                        let signature = self.signer.sign_prehashed(&digest_hash.0);
+                        let call = S::submit_signature(
+                            self.receiver_network_id.into(),
+                            digest_hash,
+                            signature,
+                        );
+                        self.sender.submit_unsigned_extrinsic(&call).await?;
+                    }
+                    let approvals = self.approvals(digest_hash).await?;
+                    if (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32) {
+                        info!(
+                        "Still not enough signatures, probably another relayer will submit commitment"
                     );
-                    self.sender.submit_unsigned_extrinsic(&call).await?;
+                        continue;
+                    }
+                    let call = R::submit_messages_commitment(
+                        self.sender_network_id.into(),
+                        offchain_data.commitment,
+                        R::multisig_proof(digest, approvals),
+                    );
+                    if let Err(err) = self.receiver.submit_unsigned_extrinsic(&call).await {
+                        error!("Failed to submit messages, probably another relayer already submitted it: {:?}", err);
+                    }
                 }
-                let approvals = self.approvals(digest_hash).await?;
-                if (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32) {
-                    info!(
-                    "Still not enough signatures, probably another relayer will submit commitment"
-                );
-                    continue;
-                }
-                let call = R::submit_messages_commitment(
-                    self.sender_network_id.into(),
-                    offchain_data.commitment,
-                    R::multisig_proof(digest, approvals),
-                );
-                if let Err(err) = self.receiver.submit_unsigned_extrinsic(&call).await {
-                    error!("Failed to submit messages, probably another relayer already submitted it: {:?}", err);
+                Ok(())
+            }
+            .await;
+
+            match res {
+                Ok(()) => backoff_secs = 1,
+                Err(e) => {
+                    warn!("Multisig relay iteration failed (will retry with backoff): {:?}", e);
+                    backoff_secs = (backoff_secs.saturating_mul(2)).min(max_backoff);
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Decide next action in multisig flow given peers count, approvals count and whether self already approved.
+    /// Mirrors the logic used in run() where threshold = bridge_types::utils::threshold(peers_len).
+    #[derive(Debug, PartialEq, Eq)]
+    enum Action { Approve, Submit, Wait }
+
+    fn decide_action(peers_len: u32, approvals_len: u32, is_already_approved: bool) -> Action {
+        let threshold = bridge_types::utils::threshold(peers_len);
+        if approvals_len < threshold {
+            if is_already_approved {
+                Action::Wait
+            } else {
+                Action::Approve
+            }
+        } else {
+            Action::Submit
+        }
+    }
+
+    #[test]
+    fn test_decide_action_threshold() {
+        let peers = 3;
+        let threshold = bridge_types::utils::threshold(peers);
+        // Below threshold
+        assert_eq!(decide_action(peers, threshold.saturating_sub(1), false), Action::Approve);
+        assert_eq!(decide_action(peers, threshold.saturating_sub(1), true), Action::Wait);
+        // At threshold and above -> submit
+        assert_eq!(decide_action(peers, threshold, false), Action::Submit);
+        assert_eq!(decide_action(peers, threshold + 1, false), Action::Submit);
+    }
+
+    #[test]
+    fn test_decide_action_edge_cases() {
+        assert_eq!(decide_action(1, 0, false), Action::Approve);
+        assert_eq!(decide_action(1, 1, false), Action::Submit);
+        assert_eq!(decide_action(0, 0, false), Action::Submit); // threshold(0)==0
     }
 }

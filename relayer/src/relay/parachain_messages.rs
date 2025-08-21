@@ -121,6 +121,21 @@ pub struct Relay<S: SenderConfig, R: ReceiverConfig> {
     sender_network_id: SubNetworkId,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SubmitDecision {
+    Wait,
+    Submit,
+}
+
+#[inline]
+fn should_submit_for_beefy(commitment_block: u64, latest_sent_beefy: u64) -> SubmitDecision {
+    if commitment_block > latest_sent_beefy {
+        SubmitDecision::Wait
+    } else {
+        SubmitDecision::Submit
+    }
+}
+
 impl<S, R> Relay<S, R>
 where
     S: SenderConfig,
@@ -180,47 +195,94 @@ where
 
     /// Periodic loop that detects new batches and relays them.
     pub async fn run(mut self) -> AnyResult<()> {
-        let mut interval = tokio::time::interval(S::average_block_time());
+        let mut backoff_secs: u64 = 1;
+        let max_backoff: u64 = 30;
         loop {
-            interval.tick().await;
-            let inbound_nonce = self.inbound_channel_nonce().await?;
-            let outbound_nonce = self.outbound_channel_nonce().await?;
-            if inbound_nonce >= outbound_nonce {
-                if inbound_nonce > outbound_nonce {
-                    error!(
-                        "Inbound channel nonce is higher than outbound channel nonce: {} > {}",
-                        inbound_nonce, outbound_nonce
-                    );
-                }
-                continue;
+            if backoff_secs > 1 {
+                debug!("retrying after {}s", backoff_secs);
+                tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
+            } else {
+                tokio::time::sleep(S::average_block_time()).await;
             }
-            for nonce in (inbound_nonce + 1)..=outbound_nonce {
-                let block_number = match self.commitment_blocks.entry(nonce) {
-                    std::collections::btree_map::Entry::Vacant(v) => {
-                        let offchain_data = self
-                            .sender
-                            .commitment_with_nonce(
-                                self.receiver_network_id.into(),
-                                nonce,
-                                BlockNumberOrHash::Finalized,
-                            )
-                            .await?;
-                        v.insert(offchain_data.block_number);
-                        offchain_data.block_number
+
+            let res: AnyResult<()> = async {
+                let inbound_nonce = self.inbound_channel_nonce().await?;
+                let outbound_nonce = self.outbound_channel_nonce().await?;
+                if inbound_nonce >= outbound_nonce {
+                    if inbound_nonce > outbound_nonce {
+                        error!(
+                            "Inbound channel nonce is higher than outbound channel nonce: {} > {}",
+                            inbound_nonce, outbound_nonce
+                        );
                     }
-                    std::collections::btree_map::Entry::Occupied(v) => v.get().clone(),
-                };
-                let latest_sent = self.syncer.latest_sent();
-                if Into::<u64>::into(block_number) > latest_sent {
-                    debug!("Waiting for BEEFY block {:?}", block_number);
-                    break;
+                    return Ok(());
                 }
-                self.send_commitment(nonce).await?;
+                for nonce in (inbound_nonce + 1)..=outbound_nonce {
+                    let block_number = match self.commitment_blocks.entry(nonce) {
+                        std::collections::btree_map::Entry::Vacant(v) => {
+                            let offchain_data = self
+                                .sender
+                                .commitment_with_nonce(
+                                    self.receiver_network_id.into(),
+                                    nonce,
+                                    BlockNumberOrHash::Finalized,
+                                )
+                                .await?;
+                            v.insert(offchain_data.block_number);
+                            offchain_data.block_number
+                        }
+                        std::collections::btree_map::Entry::Occupied(v) => v.get().clone(),
+                    };
+                let latest_sent = self.syncer.latest_sent();
+                match should_submit_for_beefy(Into::<u64>::into(block_number), latest_sent) {
+                    SubmitDecision::Wait => {
+                        debug!("Waiting for BEEFY block {:?}", block_number);
+                        break;
+                    }
+                    SubmitDecision::Submit => {}
+                }
                 if let Err(err) = self.send_commitment(nonce).await {
                     return Err(anyhow!("Error sending message commitment: {:?}", err));
                 }
                 self.commitment_blocks.remove(&nonce);
             }
+                Ok(())
+            }
+            .await;
+
+            match res {
+                Ok(()) => backoff_secs = 1,
+                Err(e) => {
+                    warn!("Parachain messages relay iteration failed (will retry with backoff): {:?}", e);
+                    backoff_secs = (backoff_secs.saturating_mul(2)).min(max_backoff);
+                }
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn pending_nonces_edges() {
+        fn pending(inb: u64, out: u64) -> Vec<u64> {
+            if inb >= out {
+                vec![]
+            } else {
+                ((inb + 1)..=out).collect()
+            }
+        }
+        assert_eq!(pending(0, 0), Vec::<u64>::new());
+        assert_eq!(pending(5, 4), Vec::<u64>::new());
+        assert_eq!(pending(4, 5), vec![5]);
+        assert_eq!(pending(3, 5), vec![4, 5]);
+    }
+
+    #[test]
+    fn test_should_submit_for_beefy() {
+        assert_eq!(should_submit_for_beefy(100, 50), SubmitDecision::Wait);
+        assert_eq!(should_submit_for_beefy(50, 100), SubmitDecision::Submit);
+        assert_eq!(should_submit_for_beefy(100, 100), SubmitDecision::Submit);
     }
 }

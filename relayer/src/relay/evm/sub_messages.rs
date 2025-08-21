@@ -178,21 +178,7 @@ impl Relay {
             .sub
             .bridge_approvals(&self.evm_network_id, signed_message)
             .await?;
-        let (v, r, s) = approvals
-            .into_iter()
-            .map(|approval| {
-                (
-                    approval.0[64],
-                    approval.0[..32].try_into().unwrap(),
-                    approval.0[32..64].try_into().unwrap(),
-                )
-            })
-            .fold((vec![], vec![], vec![]), |mut vrs, (v, r, s)| {
-                vrs.0.push(v + 27);
-                vrs.1.push(r);
-                vrs.2.push(s);
-                vrs
-            });
+        let (v, r, s) = Self::approvals_to_vrs(approvals);
         let mut call: ethers::contract::ContractCall<_, ()> =
             channel.submit(batch, v, r, s).legacy();
 
@@ -222,6 +208,36 @@ impl Relay {
             }
         }
         Ok(())
+    }
+
+    fn approvals_to_vrs(
+        approvals: Vec<sp_core::ecdsa::Signature>,
+    ) -> (Vec<u8>, Vec<[u8; 32]>, Vec<[u8; 32]>) {
+        approvals
+            .into_iter()
+            .map(|approval| {
+                (
+                    approval.0[64],
+                    approval.0[..32].try_into().expect("slice to array"),
+                    approval.0[32..64].try_into().expect("slice to array"),
+                )
+            })
+            .fold((vec![], vec![], vec![]), |mut vrs, (v, r, s)| {
+                vrs.0.push(v + 27);
+                vrs.1.push(r);
+                vrs.2.push(s);
+                vrs
+            })
+    }
+
+    #[inline]
+    #[cfg(test)]
+    fn pending_nonces(inbound_nonce: u64, outbound_nonce: u64) -> Vec<u64> {
+        if inbound_nonce >= outbound_nonce {
+            vec![]
+        } else {
+            ((inbound_nonce + 1)..=outbound_nonce).collect()
+        }
     }
 
     fn prepare_batch(
@@ -304,36 +320,136 @@ impl Relay {
         if self.signer.is_some() && !self.is_peer().await? {
             return Err(anyhow::anyhow!("Provided signer key is not a peer"));
         }
-        let mut interval = tokio::time::interval(Duration::from_secs(6));
+        let mut backoff_secs: u64 = 1;
+        let max_backoff: u64 = 30;
+        let tick = Duration::from_secs(6);
         loop {
-            interval.tick().await;
-            let inbound_nonce = self.inbound_channel_nonce().await?;
-            let outbound_nonce = self.outbound_channel_nonce().await?;
-            if inbound_nonce >= outbound_nonce {
-                if inbound_nonce > outbound_nonce {
-                    error!(
-                        "Inbound channel nonce is higher than outbound channel nonce: {} > {}",
-                        inbound_nonce, outbound_nonce
-                    );
-                }
-                continue;
+            if backoff_secs > 1 {
+                debug!("retrying after {}s", backoff_secs);
+                tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+            } else {
+                tokio::time::sleep(tick).await;
             }
-            info!(
-                "Submit commitments from {} to {}",
-                inbound_nonce, outbound_nonce
-            );
-            for nonce in (inbound_nonce + 1)..=outbound_nonce {
-                let offchain_data = self
-                    .sub
-                    .commitment_with_nonce(
-                        self.evm_network_id.into(),
-                        nonce,
-                        BlockNumberOrHash::Finalized,
-                    )
-                    .await?;
-                self.approve_and_send_commitment(offchain_data.commitment)
-                    .await?;
+
+            let res: AnyResult<()> = async {
+                let inbound_nonce = self.inbound_channel_nonce().await?;
+                let outbound_nonce = self.outbound_channel_nonce().await?;
+                if inbound_nonce >= outbound_nonce {
+                    if inbound_nonce > outbound_nonce {
+                        error!(
+                            "Inbound channel nonce is higher than outbound channel nonce: {} > {}",
+                            inbound_nonce, outbound_nonce
+                        );
+                    }
+                    return Ok(());
+                }
+                info!(
+                    "Submit commitments from {} to {}",
+                    inbound_nonce, outbound_nonce
+                );
+                for nonce in (inbound_nonce + 1)..=outbound_nonce {
+                    let offchain_data = self
+                        .sub
+                        .commitment_with_nonce(
+                            self.evm_network_id.into(),
+                            nonce,
+                            BlockNumberOrHash::Finalized,
+                        )
+                        .await?;
+                    self.approve_and_send_commitment(offchain_data.commitment)
+                        .await?;
+                }
+                Ok(())
+            }
+            .await;
+
+            match res {
+                Ok(()) => backoff_secs = 1,
+                Err(e) => {
+                    warn!("EVM relay iteration failed (will retry with backoff): {:?}", e);
+                    backoff_secs = (backoff_secs.saturating_mul(2)).min(max_backoff);
+                }
             }
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prepare_evm_signed_message() {
+        let msg = H256::from_low_u64_be(0x1234_5678);
+        let expected = {
+            let mut p = b"\x19Ethereum Signed Message:\n32".to_vec();
+            p.extend(msg.as_bytes());
+            H256(sp_core::keccak_256(&p))
+        };
+        assert_eq!(Relay::prepare_evm_signed_message(msg), expected);
+    }
+
+    // (duplicate removed) test_prepare_batch_mapping
+
+    #[test]
+    fn test_prepare_batch_mapping() {
+        use bridge_types::evm::{Message as EvmMsg, OutboundCommitment};
+        use sp_runtime::BoundedVec;
+
+        let commitment = OutboundCommitment::<MaxU32, MaxU32> {
+            nonce: 7,
+            total_max_gas: U256::from(12345u64),
+            messages: sp_runtime::BoundedVec::truncate_from(vec![
+                EvmMsg {
+                    max_gas: U256::from(100u64),
+                    target: Address::from_slice(&[0x11u8; 20]),
+                    payload: BoundedVec::truncate_from(vec![1u8, 2, 3, 4]),
+                },
+                EvmMsg {
+                    max_gas: U256::from(200u64),
+                    target: Address::from_slice(&[0x22u8; 20]),
+                    payload: BoundedVec::truncate_from(vec![5u8, 6, 7, 8]),
+                },
+            ]),
+        };
+        let batch = Relay::prepare_batch(&commitment);
+        assert_eq!(batch.nonce, 7u64.into());
+        assert_eq!(batch.total_max_gas, U256::from(12345u64).into());
+        assert_eq!(batch.messages.len(), 2);
+        assert_eq!(batch.messages[0].max_gas, U256::from(100u64).into());
+        assert_eq!(batch.messages[0].target, Address::from_slice(&[0x11u8; 20]).into());
+        assert_eq!(batch.messages[0].payload, ethers::types::Bytes::from(vec![1u8, 2, 3, 4]));
+        assert_eq!(batch.messages[1].max_gas, U256::from(200u64).into());
+        assert_eq!(batch.messages[1].target, Address::from_slice(&[0x22u8; 20]).into());
+        assert_eq!(batch.messages[1].payload, ethers::types::Bytes::from(vec![5u8, 6, 7, 8]));
+    }
+
+    #[test]
+    fn test_pending_nonces_edges() {
+        assert_eq!(Relay::pending_nonces(5, 5), Vec::<u64>::new());
+        assert_eq!(Relay::pending_nonces(6, 5), Vec::<u64>::new());
+        assert_eq!(Relay::pending_nonces(4, 5), vec![5]);
+        assert_eq!(Relay::pending_nonces(3, 5), vec![4, 5]);
+    }
+
+    #[test]
+    fn test_approvals_to_vrs() {
+        let mut sig1 = [0u8; 65];
+        sig1[0..32].copy_from_slice(&[0xAA; 32]);
+        sig1[32..64].copy_from_slice(&[0xBB; 32]);
+        sig1[64] = 0;
+        let mut sig2 = [0u8; 65];
+        sig2[0..32].copy_from_slice(&[0x11; 32]);
+        sig2[32..64].copy_from_slice(&[0x22; 32]);
+        sig2[64] = 1;
+        let approvals = vec![sp_core::ecdsa::Signature::from_raw(sig1), sp_core::ecdsa::Signature::from_raw(sig2)];
+        let (v, r, s) = Relay::approvals_to_vrs(approvals);
+        assert_eq!(v, vec![27u8, 28u8]);
+        assert_eq!(r[0], [0xAA; 32]);
+        assert_eq!(s[0], [0xBB; 32]);
+        assert_eq!(r[1], [0x11; 32]);
+        assert_eq!(s[1], [0x22; 32]);
+    }
+
+    // Omitted submit_message_gas test to avoid unsafe instance creation; the logic is a constant add.
 }

@@ -61,3 +61,9 @@ See `README.md` for exact commands and examples.
 - Add a `*-gen` crate with Subxt metadata or EVM ABIs.
 - Implement CLI surface in `relayer/src/cli` and relay logic in `relayer/src/relay`.
 - Integrate typed clients under `relayer/src/substrate` or `relayer/src/ethereum` as appropriate.
+
+## Testing Guidelines
+
+- Unit tests: When adding a new function, add at least one unit test that runs under `cargo test`. For functions with non-trivial or branching logic, prefer multiple unit tests that cover edge cases and error paths.
+- Integration tests: For new CLI commands or flows, add an integration test under `relayer/tests/` that validates the command’s presence and basic argument parsing without requiring live networks.
+- Scope: Keep tests deterministic and offline by default; mock or isolate network-dependent pieces where feasible.

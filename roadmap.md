@@ -4,19 +4,19 @@ Use these prompts as starting points. Keep this list up to date as you deliver w
 
 ## P0 — Immediate
 
-- Substrate → TON relay (outbound to TON)
-  - Prompt: Implement a relay loop that reads outbound TON commitments from Substrate and sends BOCs to the TON channel.
-  - Details: Mirror `evm/sub_messages.rs` but for TON. Fetch Substrate outbound nonce and commitments for `GenericNetworkId::TON`, build TON `SendInboundMessage` or app-specific cells, sign/send via `SignedTonClient` wallet, and advance until nonces match. Add backoff, idempotence, and logging.
-  - DoD: `bridge relay sora ton` (or equivalent CLI path) submits outbound batches/messages to TON; `status.md` updated with “implemented”.
-
-- Resilience/backoff for relayer loops
+- Resilience/backoff for relayer loops [DONE]
   - Prompt: Add retry/backoff and error classification to EVM, Parachain, Multisig, and TON relayers.
   - Details: Wrap network calls with exponential backoff, avoid tight loops on transient errors, and surface structured logs for failures.
-  - DoD: Each loop handles transient RPC/network errors without crashing or spamming; logs indicate retries and next steps.
+  - DoD: Loops handle transient RPC/network errors without crashing or spamming; logs indicate retries and next steps.
 
 - Finish docs for CLI subcommands
   - Prompt: Add module-level and function docs across `relayer/src/cli/bridge/**` to explain arguments, flows, and examples.
   - DoD: All public CLI commands show `--help` with clear descriptions; `relayer/AGENTS.md` references key subcommands.
+
+- Substrate → TON relay (enable end-to-end once runtime supports outbound)
+  - Prompt: Runtime currently does not emit TON outbound commitments. Keep relay loop scaffolded and ready; once pallets add TON outbound, wire the send path to build `SendInboundMessage` cells and submit via TON wallet.
+  - Details: Reuse `relayer/src/relay/ton/sub_messages.rs` structure; decode payload into TON cells and submit with configured value/bounce. Confirm channel get-methods and nonce handling.
+  - DoD: With runtime support present, `bridge relay sora ton` advances nonces and submits TON messages; `status.md` updated with “implemented”.
 
 ## P1 — Next
 
@@ -66,4 +66,3 @@ Use these prompts as starting points. Keep this list up to date as you deliver w
 - Performance and batching
   - Prompt: Optimize batch sizes/parallelism; reduce RPC round-trips where safe.
   - DoD: Measurable reduction in latency or RPC usage; no correctness regressions.
-
