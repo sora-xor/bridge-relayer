@@ -28,6 +28,25 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+//! Bridge commands grouping register/relay/transfer flows.
+//!
+//! Common patterns:
+//! - Registration: `bridge register ...` to wire apps, channels, and contracts
+//!   on each side before relaying.
+//! - Relaying: `bridge relay <from> <to> ...` to move messages or commitments
+//!   between networks. Use the root `--*-url` and `--*-key` flags for endpoints
+//!   and keys.
+//!
+//! Examples:
+//! - SORA → EVM messages:
+//!   `bridge relay sora evm --signer <ECDSA_SEED>`
+//! - EVM → SORA messages:
+//!   `bridge relay evm sora --signer <ECDSA_SEED>`
+//! - SORA → TON messages:
+//!   `bridge relay sora ton --value 100000000`
+//! - Subscribe BEEFY (utility at root level):
+//!   `subscribe-beefy --substrate-url ws://...`
+
 mod register;
 mod relay;
 mod transfer;

@@ -87,12 +87,19 @@ This document summarizes what the workspace supports today, what’s partial, an
 - Parachain: Outbound to EVM/TON is unimplemented in `SenderConfig`.
 - Error handling and backoff in relayer loops could be expanded; some unimplemented! guards remain for unsupported directions.
 
+## Recent Changes
+
+- Digest matching semantics tightened in `relayer/src/relay/messages_subscription.rs::load_digest`:
+  - Now requires BOTH `GenericNetworkId` and `commitment_hash` to match a digest item (AND logic).
+  - Previously matched if either field matched (OR), which could yield false positives when multiple logs were present at a block.
+  - Unit tests updated to reflect the stricter behavior.
+
 ## Local Development Overrides
 
 - For local development, the workspace patches `sora2-common` crates to a sibling checkout (see root `Cargo.toml` [patch] section) so all crates use the same local versions:
-  - `beefy-light-client`, `bridge-common`, `bridge-types`, `leaf-provider-rpc` are patched to `../sora2-common/pallets/*`.
+  - `beefy-light-client`, `bridge-common`, `bridge-types`, `leaf-provider-rpc`, and `leaf-provider-runtime-api` are patched to `../sora2-common/pallets/*`.
 - This ensures the relayer builds against the version that contains TON outbound commitment types and related APIs.
-- Action: When releasing, replace these path dependencies with pinned tags in this repository’s `Cargo.toml` (or bump tags in sora2-common) and update `Cargo.lock`.
+- Action for releases/CI: Replace these path dependencies with pinned tags (or a specific revision) from `sora2-common`, and update `Cargo.lock`.
 
 ## Resilience/Backoff
 

@@ -33,6 +33,11 @@ use std::time::Duration;
 use crate::cli::prelude::*;
 use crate::relay::evm::evm_messages::SubstrateMessagesRelay;
 
+/// Relay EVM channel events to Substrate (SORA) inbound channel.
+///
+/// Tails the EVM `ChannelHandler` for dispatched messages and submits
+/// corresponding commitments to SORA. Requires `--signer` ECDSA seed for
+/// approvals on SORA side.
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]

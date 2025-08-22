@@ -33,6 +33,11 @@ use toner::ton::MsgAddress;
 
 use crate::cli::prelude::*;
 
+/// Relay Substrate (SORA) outbound messages to TON inbound channel.
+///
+/// Reads outbound commitments from SORA, builds TON `SendInboundMessage` cells,
+/// and submits via the configured TON wallet. The optional `--value` attaches
+/// nanotons per message (default ≈0.1 TON). Use `--no-bounce` to disable bounce.
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]
@@ -87,4 +92,3 @@ impl Command {
         Ok(())
     }
 }
-

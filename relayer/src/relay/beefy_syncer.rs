@@ -88,3 +88,32 @@ impl BeefySyncer {
             .ok();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_update_only_increases() {
+        let s = BeefySyncer::new();
+        assert_eq!(s.latest_requested(), 0);
+        assert_eq!(s.latest_sent(), 0);
+
+        s.update_latest_requested(10);
+        s.update_latest_sent(5);
+        assert_eq!(s.latest_requested(), 10);
+        assert_eq!(s.latest_sent(), 5);
+
+        // Lower values should not decrease the counters
+        s.update_latest_requested(7);
+        s.update_latest_sent(3);
+        assert_eq!(s.latest_requested(), 10);
+        assert_eq!(s.latest_sent(), 5);
+
+        // Higher values should update
+        s.update_latest_requested(11);
+        s.update_latest_sent(12);
+        assert_eq!(s.latest_requested(), 11);
+        assert_eq!(s.latest_sent(), 12);
+    }
+}

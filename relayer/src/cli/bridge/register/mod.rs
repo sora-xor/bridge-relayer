@@ -30,6 +30,20 @@
 
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
+//! Register bridge apps and channels across networks.
+//!
+//! Typical flow:
+//! - Register apps on SORA for the target network (e.g., ERC20/Eth app).
+//! - Initialize or reset the channel contract on EVM/TON.
+//! - Register channel addresses on SORA for the external network.
+//!
+//! Examples:
+//! - SORA ↔ EVM fungible app (new asset):
+//!   `bridge register sora evm app fungible-new --contract 0x... --name DAI --symbol DAI --precision 18`
+//! - Initialize EVM channel:
+//!   `bridge register evm initialize-channels --evm-url http://...`
+//! - SORA ↔ TON app and channels:
+//!   `bridge register sora ton app ...` then `bridge register sora ton channels ...`
 mod evm;
 mod liberland;
 mod parachain;

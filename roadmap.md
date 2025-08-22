@@ -9,7 +9,7 @@ Use these prompts as starting points. Keep this list up to date as you deliver w
   - Details: Wrap network calls with exponential backoff, avoid tight loops on transient errors, and surface structured logs for failures.
   - DoD: Loops handle transient RPC/network errors without crashing or spamming; logs indicate retries and next steps.
 
-- Finish docs for CLI subcommands
+- Finish docs for CLI subcommands [DONE]
   - Prompt: Add module-level and function docs across `relayer/src/cli/bridge/**` to explain arguments, flows, and examples.
   - DoD: All public CLI commands show `--help` with clear descriptions; `relayer/AGENTS.md` references key subcommands.
 
@@ -18,9 +18,9 @@ Use these prompts as starting points. Keep this list up to date as you deliver w
   - DoD: `bridge relay sora ton` advances nonces and submits TON messages. Status/docs updated.
 
 - Replace local path dependencies with released tags
-  - Prompt: The relayer uses local path overrides to `sora2-common` crates (types, bridge-common, beefy-light-client, leaf-provider-rpc) to access TON outbound support.
-  - Details: Publish or bump sora2-common tags that include TON outbound types; update `relayer/Cargo.toml` to use pinned tags and refresh `Cargo.lock`.
-  - DoD: No local path overrides; CI builds from tagged dependencies.
+  - Prompt: For development, this workspace uses local path overrides to a sibling `../sora2-common` to access the latest TON outbound support.
+  - Details: For releases/CI, publish or bump `sora2-common` tags that include TON outbound types, then replace path overrides with pinned tags (or revs) and refresh `Cargo.lock`.
+  - DoD: Release build path uses pinned tags (no local overrides); CI builds from tagged dependencies.
 
 ## P1 — Next
 

@@ -59,18 +59,7 @@ pub async fn load_digest<S: SenderConfig>(
     if digest.logs.is_empty() {
         return Err(anyhow!("Digest is empty"));
     }
-    let valid_items = digest
-        .logs
-        .iter()
-        .filter(|log| {
-            let AuxiliaryDigestItem::Commitment(digest_network_id, digest_commitment_hash) = log;
-            if network_id != *digest_network_id && commitment_hash != *digest_commitment_hash {
-                false
-            } else {
-                true
-            }
-        })
-        .count();
+    let valid_items = count_matching_digest_items(&digest, &network_id, &commitment_hash);
     if valid_items != 1 {
         return Err(anyhow!(
             "Expected digest for commitment not found: {:?}",
@@ -78,6 +67,22 @@ pub async fn load_digest<S: SenderConfig>(
         ));
     }
     Ok(digest)
+}
+
+/// Count digest items that exactly match both network id AND commitment hash.
+fn count_matching_digest_items(
+    digest: &AuxiliaryDigest,
+    network_id: &GenericNetworkId,
+    commitment_hash: &H256,
+) -> usize {
+    digest
+        .logs
+        .iter()
+        .filter(|log| {
+            let AuxiliaryDigestItem::Commitment(digest_network_id, digest_commitment_hash) = log;
+            network_id == digest_network_id && commitment_hash == digest_commitment_hash
+        })
+        .count()
 }
 
 /// Load a commitment by nonce and derive the corresponding simplified MMR proof.
@@ -148,4 +153,36 @@ async fn leaf_proof_with_digest<S: SenderConfig>(
         }
     }
     return Err(anyhow::anyhow!("leaf proof not found"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bridge_types::types::AuxiliaryDigestItem;
+    use bridge_types::EVMChainId;
+
+    #[test]
+    fn test_count_matching_digest_items_logic() {
+        let nid_a = GenericNetworkId::EVM(EVMChainId::from([0u8; 32]));
+        let nid_b = GenericNetworkId::EVM(EVMChainId::from([1u8; 32]));
+        let h1 = H256::repeat_byte(1);
+        let h2 = H256::repeat_byte(2);
+
+        let digest = AuxiliaryDigest {
+            logs: vec![
+                AuxiliaryDigestItem::Commitment(nid_a.clone(), h1),        // matches both for (nid_a,h1)
+                AuxiliaryDigestItem::Commitment(nid_b.clone(), h1),        // matches on hash only
+                AuxiliaryDigestItem::Commitment(nid_a.clone(), h2),        // matches on network only
+                AuxiliaryDigestItem::Commitment(nid_b.clone(), H256::zero()), // matches neither
+            ],
+        };
+
+        // With AND logic, only the exact (network,hash) pair matches
+        let count = super::count_matching_digest_items(&digest, &nid_a, &h1);
+        assert_eq!(count, 1);
+
+        // No match: different network and unrelated hash
+        let count_none = super::count_matching_digest_items(&digest, &nid_b, &H256::repeat_byte(3));
+        assert_eq!(count_none, 0);
+    }
 }

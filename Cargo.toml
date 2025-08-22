@@ -49,6 +49,13 @@ beefy-merkle-tree = { git = "https://github.com/sora-xor/substrate.git", branch 
 # The latest versions of thread_local (1.1.2) had a memory leak. This version doesn't have it.
 thread_local = { git = "https://github.com/sora-xor/thread_local-rs.git", branch = "patch-1.0.1" }
 
+[patch."https://github.com/sora-xor/sora2-common.git"]
+beefy-light-client = { path = "../sora2-common/pallets/beefy-light-client" }
+leaf-provider-rpc = { path = "../sora2-common/pallets/leaf-provider/rpc" }
+leaf-provider-runtime-api = { path = "../sora2-common/pallets/leaf-provider/runtime-api" }
+bridge-common = { path = "../sora2-common/pallets/bridge-common" }
+bridge-types = { path = "../sora2-common/pallets/types" }
+
 [patch."https://github.com/open-web3-stack/open-runtime-module-library.git"]
 orml-tokens = { git = "https://github.com/open-web3-stack//open-runtime-module-library.git", branch = "polkadot-v0.9.38" }
 orml-traits = { git = "https://github.com/open-web3-stack//open-runtime-module-library.git", branch = "polkadot-v0.9.38" }
@@ -104,12 +111,7 @@ beefy-gadget = { git = "https://github.com/sora-xor/substrate.git", branch = "po
 beefy-gadget-rpc = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 beefy-merkle-tree = { git = "https://github.com/sora-xor/substrate.git", branch = "polkadot-v0.9.38" }
 
-[patch."https://github.com/sora-xor/sora2-common.git"]
-beefy-light-client = { path = "../sora2-common/pallets/beefy-light-client" }
-leaf-provider-rpc = { path = "../sora2-common/pallets/leaf-provider/rpc" }
-leaf-provider-runtime-api = { path = "../sora2-common/pallets/leaf-provider/runtime-api" }
-bridge-common = { path = "../sora2-common/pallets/bridge-common" }
-bridge-types = { path = "../sora2-common/pallets/types" }
+
 
 
 [patch."https://github.com/sora-xor/sora2-network.git"]

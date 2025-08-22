@@ -118,6 +118,57 @@ pub fn log_extrinsic_events<T: ConfigExt>(events: ExtrinsicEvents<T::Config>) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_binary_search_first_occurrence_basic() {
+        // monotonic sequence of values; find first index where value >= target
+        let data = vec![1u32, 2, 3, 4, 4, 5];
+        let data_ref = &data;
+        let find = move |i: u32| {
+            let d = data_ref;
+            async move { Ok::<_, anyhow::Error>(d.get(i as usize).cloned()) }
+        };
+        let idx = binary_search_first_occurrence(0u32, data.len() as u32, 4u32, find)
+            .await
+            .expect("ok");
+        assert_eq!(idx, Some(3u32));
+    }
+
+    #[tokio::test]
+    async fn test_binary_search_first_occurrence_not_found() {
+        let data = vec![10u32, 20, 30];
+        let data_ref = &data;
+        let find = move |i: u32| {
+            let d = data_ref;
+            async move { Ok::<_, anyhow::Error>(d.get(i as usize).cloned()) }
+        };
+        let idx = binary_search_first_occurrence(0u32, data.len() as u32, 31u32, find)
+            .await
+            .expect("ok");
+        assert_eq!(idx, None);
+    }
+
+    #[test]
+    fn test_is_transaction_imported_or_banned_codes() {
+        use jsonrpsee::core::Error as RpcCoreError;
+        use jsonrpsee::types::error::{CallError, ErrorObjectOwned};
+
+        // Helper to wrap a jsonrpsee error into subxt::Error::Rpc(ClientError)
+        fn wrap(code: i32) -> subxt::Error {
+            let obj = ErrorObjectOwned::owned(code, "test", None::<()>);
+            let err = RpcCoreError::Call(CallError::Custom(obj));
+            subxt::Error::Rpc(subxt::error::RpcError::ClientError(Box::new(err)))
+        }
+
+        assert!(UnsignedClient::<MainnetConfig>::is_transaction_imported_or_banned(&wrap(1013)));
+        assert!(UnsignedClient::<MainnetConfig>::is_transaction_imported_or_banned(&wrap(1014)));
+        assert!(!UnsignedClient::<MainnetConfig>::is_transaction_imported_or_banned(&wrap(42)));
+    }
+}
+
 /// Minimal wrapper to allow cloning the underlying Jsonrpsee client.
 #[derive(Debug, Clone)]
 pub struct ClonableClient(Arc<jsonrpsee::async_client::Client>);

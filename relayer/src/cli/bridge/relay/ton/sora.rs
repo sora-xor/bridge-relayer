@@ -32,6 +32,11 @@ use toner::ton::MsgAddress;
 
 use crate::cli::prelude::*;
 
+/// Relay TON outbound messages to Substrate (SORA) inbound channel.
+///
+/// Scans TON channel transactions to extract outbound messages and submits
+/// corresponding inbound commitments to SORA. Requires `--signer` ECDSA seed
+/// for the Data Signer approvals on SORA side.
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]

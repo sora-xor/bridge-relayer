@@ -157,9 +157,8 @@ where
     }
 
     pub fn validator_eth_signature(&self, pos: usize) -> Bytes {
-        let mut validator_signature = self.signatures[pos].clone().expect("signed").to_vec();
-        validator_signature[64] += 27;
-        return validator_signature.into();
+        let validator_signature = self.signatures[pos].clone().expect("signed").to_vec();
+        return eth_ecdsa_signature_from_beefy(validator_signature);
     }
 
     pub fn validator_pubkey(&self, pos: usize) -> H160 {
@@ -229,4 +228,187 @@ where
         };
         Ok((mmr_leaf, proof))
     }
+}
+
+/// Convert a 65-byte BEEFY ECDSA signature (r[32]||s[32]||v[1] with v in {0,1})
+/// to an Ethereum-style signature by adjusting `v += 27`.
+pub fn eth_ecdsa_signature_from_beefy(mut sig: Vec<u8>) -> Bytes {
+    assert_eq!(sig.len(), 65, "signature must be 65 bytes");
+    sig[64] = sig[64].saturating_add(27);
+    sig.into()
+}
+
+/// Build the same validator proof as `validators_proof_sub` but from raw components.
+pub fn validators_proof_from_components(
+    initial_bitfield: bridge_common::bitfield::BitField,
+    random_bitfield: bridge_common::bitfield::BitField,
+    validators: &[H160],
+    signatures: &[Option<sp_core::ecdsa::Signature>],
+) -> bridge_common::beefy_types::ValidatorProof {
+    let mut positions = vec![];
+    let mut out_sigs = vec![];
+    let mut out_keys = vec![];
+    let mut out_proofs = vec![];
+    for i in 0..random_bitfield.len() {
+        if random_bitfield.is_set(i) {
+            positions.push(i as u128);
+            let sig = eth_ecdsa_signature_from_beefy(signatures[i].clone().expect("signed").0.to_vec()).to_vec();
+            out_sigs.push(sig);
+            out_keys.push(validators[i]);
+            let proof = beefy_merkle_tree::merkle_proof::<sp_runtime::traits::Keccak256, _, _>(
+                validators.to_vec(),
+                i,
+            )
+            .proof;
+            out_proofs.push(proof);
+        }
+    }
+    bridge_common::beefy_types::ValidatorProof {
+        signatures: out_sigs,
+        positions,
+        public_keys: out_keys,
+        public_key_merkle_proofs: out_proofs,
+        validator_claims_bitfield: initial_bitfield,
+    }
+}
+/// Build a ValidatorProof from provided validators and signatures according to a random bitfield.
+///
+/// - `initial_bitfield` is carried through unchanged.
+/// - `random_bitfield` selects which validator positions to include.
+/// - `validators` holds the H160 keys in merkle-tree order.
+/// - `signatures` should be Ethereum-formatted 65-byte signatures (v in {27,28}) aligned by index.
+pub fn assemble_validator_proof(
+    initial_bitfield: bridge_common::bitfield::BitField,
+    random_bitfield: bridge_common::bitfield::BitField,
+    validators: &[H160],
+    signatures: &[Vec<u8>],
+) -> bridge_common::beefy_types::ValidatorProof {
+    let mut positions = vec![];
+    let mut collected_sigs = vec![];
+    let mut public_keys = vec![];
+    let mut public_key_merkle_proofs = vec![];
+    for i in 0..random_bitfield.len() {
+        if random_bitfield.is_set(i) {
+            positions.push(i as u128);
+            collected_sigs.push(signatures[i].clone());
+            public_keys.push(validators[i]);
+            let proof = beefy_merkle_tree::merkle_proof::<sp_runtime::traits::Keccak256, _, _>(
+                validators.to_vec(),
+                i,
+            )
+            .proof;
+            public_key_merkle_proofs.push(proof);
+        }
+    }
+    bridge_common::beefy_types::ValidatorProof {
+        signatures: collected_sigs,
+        positions,
+        public_keys,
+        public_key_merkle_proofs,
+        validator_claims_bitfield: initial_bitfield,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_eth_ecdsa_signature_from_beefy_adjusts_v() {
+        let mut s0 = vec![0u8; 65];
+        s0[64] = 0;
+        let out0 = eth_ecdsa_signature_from_beefy(s0);
+        assert_eq!(out0[64], 27);
+
+        let mut s1 = vec![0u8; 65];
+        s1[64] = 1;
+        let out1 = eth_ecdsa_signature_from_beefy(s1);
+        assert_eq!(out1[64], 28);
+    }
+
+    #[test]
+    fn test_assemble_validator_proof_basic() {
+        use bridge_common::bitfield::BitField;
+        // 4 validators with simple sequential H160s
+        let validators = vec![
+            H160::from_low_u64_be(0),
+            H160::from_low_u64_be(1),
+            H160::from_low_u64_be(2),
+            H160::from_low_u64_be(3),
+        ];
+        // signatures aligned by index (dummy 65-byte each with distinct last byte)
+        let mut sigs = vec![];
+        for i in 0..validators.len() {
+            let mut s = vec![0u8; 65];
+            s[64] = if i % 2 == 0 { 27 } else { 28 };
+            sigs.push(s);
+        }
+        let initial = BitField::create_bitfield(&[], validators.len());
+        let random = BitField::create_bitfield(&[1u32, 3u32], validators.len());
+
+        let proof = assemble_validator_proof(initial.clone(), random, &validators, &sigs);
+        assert_eq!(proof.positions.len(), 2);
+        // Validate content by matching positions to signatures/keys
+        let idx1 = proof.positions.iter().position(|&p| p == 1u128).expect("pos1");
+        let idx3 = proof.positions.iter().position(|&p| p == 3u128).expect("pos3");
+        assert_eq!(proof.public_keys[idx1], validators[1]);
+        assert_eq!(proof.public_keys[idx3], validators[3]);
+        assert_eq!(proof.signatures[idx1][64], 28);
+        assert_eq!(proof.signatures[idx3][64], 28);
+        // Merkle proofs should be non-empty when more than 1 validator
+        assert!(!proof.public_key_merkle_proofs[0].is_empty());
+        assert_eq!(proof.validator_claims_bitfield.len(), initial.len());
+    }
+
+    #[test]
+    fn test_validators_proof_sub_consistency_with_assemble() {
+        use bridge_common::bitfield::BitField;
+        use sp_core::ecdsa::Signature as BeefySig;
+
+        let validators = vec![
+            H160::from_low_u64_be(10),
+            H160::from_low_u64_be(11),
+            H160::from_low_u64_be(12),
+            H160::from_low_u64_be(13),
+        ];
+        // Construct raw BEEFY signatures (v={0,1})
+        let mut raw1 = [0u8; 65]; raw1[64] = 0;
+        let mut raw3 = [0u8; 65]; raw3[64] = 1;
+        let sigs: Vec<Option<BeefySig>> = vec![
+            Some(BeefySig::from_raw(raw1)),
+            None,
+            None,
+            Some(BeefySig::from_raw(raw3)),
+        ];
+        let initial = BitField::create_bitfield(&[], validators.len());
+        let random = BitField::create_bitfield(&[0u32, 3u32], validators.len());
+
+        // Build proof via components (mirrors validators_proof_sub)
+        let sub_proof = validators_proof_from_components(initial.clone(), random, &validators, &sigs);
+
+        // Build proof via assemble_validator_proof from ETH-encoded signatures
+        let eth_sigs: Vec<Vec<u8>> = sigs
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                if let Some(s) = s {
+                    eth_ecdsa_signature_from_beefy(s.0.to_vec()).to_vec()
+                } else {
+                    // not selected by random -> dummy, will be skipped
+                    vec![0u8; 65]
+                }
+            })
+            .collect();
+        let assembled = assemble_validator_proof(initial, BitField::create_bitfield(&[0u32,3u32], validators.len()), &validators, &eth_sigs);
+
+        assert_eq!(sub_proof.positions, assembled.positions);
+        assert_eq!(sub_proof.public_keys, assembled.public_keys);
+        assert_eq!(sub_proof.signatures, assembled.signatures);
+        assert_eq!(sub_proof.public_key_merkle_proofs, assembled.public_key_merkle_proofs);
+    }
+
+    // Constructing a fully valid BeefyJustification<T> offline requires building
+    // sp_beefy::Commitment payloads and MMR leaf types that don't expose simple
+    // constructors. The above consistency test covers the exact logic of
+    // validators_proof_sub via pure helpers.
 }

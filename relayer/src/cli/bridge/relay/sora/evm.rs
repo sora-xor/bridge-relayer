@@ -31,6 +31,11 @@
 use crate::cli::prelude::*;
 use std::time::Duration;
 
+/// Relay Substrate (SORA) outbound batches to EVM `ChannelHandler`.
+///
+/// Collects approved commitments on SORA, assembles an EVM submission, and
+/// calls `submit` on the EVM channel. Provide `--signer` with an ECDSA seed
+/// if the EVM side requires batched signature submission.
 #[derive(Args, Clone, Debug)]
 pub(crate) struct Command {
     #[clap(flatten)]

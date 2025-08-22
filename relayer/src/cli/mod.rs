@@ -51,8 +51,22 @@ use crate::prelude::*;
 use clap::*;
 
 /// Bridge relayer CLI root.
+///
+/// This CLI groups registration, relay, and transfer utilities for the
+/// Substrate↔EVM/TON/SORA parachain/Liberland bridges.
+///
+/// Global options configure endpoints and keys; subcommands narrow the
+/// direction and network. See `bridge` for the main surface.
 #[derive(Parser, Debug)]
-#[clap(version, author)]
+#[clap(
+    version,
+    author,
+    about = "Multi-chain bridge relayer for SORA ↔ external networks",
+    long_about = "CLI to register channels/apps and relay messages/commitments between\n\
+SORA mainnet, its parachain, Liberland, EVM chains, and TON. Use global flags\n\
+to set endpoints/keys (e.g. --substrate-url/key, --evm-url/key, --ton-url/key)\n\
+and run `bridge relay ...` for the desired direction."
+)]
 pub struct Cli {
     #[clap(flatten)]
     sub: SubstrateClient,

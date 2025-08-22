@@ -45,6 +45,25 @@ This workspace contains a Rust implementation of a multi-chain bridge relayer us
 
 See `README.md` for exact commands and examples.
 
+## CLI Cheat Sheet
+
+- bridge register:
+  - SORA ↔ EVM fungible app (new asset):
+    - `bridge register sora evm app fungible-new --contract 0x... --name DAI --symbol DAI --precision 18`
+  - Initialize/Reset EVM channel:
+    - `bridge register evm initialize-channels`
+    - `bridge register evm reset-channels`
+  - SORA ↔ TON app/channels:
+    - `bridge register sora ton app ...`
+    - `bridge register sora ton channels ...`
+
+- bridge relay:
+  - EVM → SORA: `bridge relay evm sora --signer <ECDSA_SEED>`
+  - SORA → EVM: `bridge relay sora evm --signer <ECDSA_SEED>`
+  - TON → SORA: `bridge relay ton sora --signer <ECDSA_SEED>`
+  - SORA → TON: `bridge relay sora ton --value 100000000` (≈0.1 TON)
+  - SORA ↔ Parachain (BEEFY/multisig): `bridge relay sora parachain ...`
+
 ## Useful Concepts
 
 - BEEFY/MMR: Finality and Merkle Mountain Range proofs (sp-beefy, mmr-rpc) consumed to validate cross-chain messages.

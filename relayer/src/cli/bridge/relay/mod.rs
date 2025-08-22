@@ -30,6 +30,18 @@
 
 // TODO #167: fix clippy warnings
 #![allow(clippy::all)]
+//! Relay message/commitment flows by origin network.
+//!
+//! Use `bridge relay <origin> <dest> ...` subcommands. Each leaf command
+//! wires the appropriate clients, discovers channel/app state, and runs
+//! the corresponding relayer loop with resilience/backoff.
+//!
+//! Quick examples:
+//! - `bridge relay evm sora --signer <ECDSA_SEED>`
+//! - `bridge relay sora evm --signer <ECDSA_SEED>`
+//! - `bridge relay ton sora --signer <ECDSA_SEED>`
+//! - `bridge relay sora ton --value 100000000` (≈0.1 TON)
+
 mod evm;
 mod liberland;
 mod parachain;
