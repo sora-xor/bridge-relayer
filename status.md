@@ -40,9 +40,9 @@ This document summarizes what the workspace supports today, what’s partial, an
   - TON → Substrate: Implemented.
     - File: `relayer/src/relay/ton/ton_messages.rs`
     - Reads `outboundNonce` from TON channel, parses outbound msgs from TON transactions, and submits `InboundCommitment` (TON variant) to Substrate.
-  - Substrate → TON: Partially implemented (blocked by runtime support).
+  - Substrate → TON: Implemented.
     - File: `relayer/src/relay/ton/sub_messages.rs`
-    - The relay loop scaffolding exists (clients, wallet, nonce comparison, backoff), but the SORA pallets do not emit TON outbound commitments yet. As of current `bridge_types`, `ton::Commitment` only has the `Inbound` variant, and the outbound channel pallet explicitly logs that “TON messages are not supported yet by this channel”. Once runtime adds TON outbound support, wire the send path to build `SendInboundMessage` cells and submit via the TON wallet.
+    - Reads outbound TON commitments from Substrate, compares nonces with TON inbound channel, builds `SendInboundMessage` cells from payload bytes, and submits via the configured TON wallet with basic backoff. Per-message value is capped by `max_fee`.
 
 ## Chain-Specific Support Gaps
 
@@ -83,10 +83,19 @@ This document summarizes what the workspace supports today, what’s partial, an
 ## Known TODOs and Unfinished Work
 
 - General: Many modules carry `// TODO #167: fix clippy warnings`.
-- TON: Outbound (Substrate → TON) requires runtime support. Relayer loop is scaffolded; enable actual message submission when pallets produce TON outbound commitments.
 - Liberland: BEEFY light client path is unimplemented; current flow uses multisig proofs only.
 - Parachain: Outbound to EVM/TON is unimplemented in `SenderConfig`.
 - Error handling and backoff in relayer loops could be expanded; some unimplemented! guards remain for unsupported directions.
+
+## Local Development Overrides
+
+- For local development, the relayer currently points to sibling `sora2-common` crates via path overrides in `relayer/Cargo.toml`:
+  - `beefy-light-client = { path = "../../sora2-common/pallets/beefy-light-client" }`
+  - `bridge-common = { path = "../../sora2-common/pallets/bridge-common" }`
+  - `bridge-types = { path = "../../sora2-common/pallets/types" }`
+  - `leaf-provider-rpc = { path = "../../sora2-common/pallets/leaf-provider/rpc" }`
+- This ensures the relayer builds against the version that contains TON outbound commitment types and related APIs.
+- Action: When releasing, replace these path dependencies with pinned tags in this repository’s `Cargo.toml` (or bump tags in sora2-common) and update `Cargo.lock`.
 
 ## Resilience/Backoff
 

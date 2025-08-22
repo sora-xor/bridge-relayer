@@ -321,7 +321,10 @@ impl SenderConfig for MainnetConfig {
             GenericNetworkId::EVM(network_id) => mainnet_runtime::storage()
                 .bridge_outbound_channel()
                 .latest_commitment(GenericNetworkId::EVM(network_id)),
-            _ => unimplemented!("This storage is not supported for HASHI bridge"),
+            GenericNetworkId::TON(network_id) => mainnet_runtime::storage()
+                .bridge_outbound_channel()
+                .latest_commitment(GenericNetworkId::TON(network_id)),
+            GenericNetworkId::EVMLegacy(_) => unimplemented!(),
         }
     }
 

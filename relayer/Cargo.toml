@@ -8,10 +8,10 @@ ethereum-gen = { path = "../ethereum-gen" }
 substrate-gen = { path = "../substrate-gen" }
 parachain-gen = { path = "../parachain-gen" }
 liberland-gen = { path = "../liberland-gen" }
-beefy-light-client = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
-bridge-common = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
-bridge-types = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
-leaf-provider-rpc = { git = "https://github.com/sora-xor/sora2-common.git", tag = "1.0.18" }
+beefy-light-client = { path = "../../sora2-common/pallets/beefy-light-client" }
+bridge-common = { path = "../../sora2-common/pallets/bridge-common" }
+bridge-types = { path = "../../sora2-common/pallets/types" }
+leaf-provider-rpc = { path = "../../sora2-common/pallets/leaf-provider/rpc" }
 ethers = { version = "2.0.0", features = ["ws", "rustls"] }
 ethers-core = "=2.0.0"
 common = { git = "https://github.com/sora-xor/sora2-network.git" }

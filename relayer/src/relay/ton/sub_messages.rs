@@ -160,6 +160,15 @@ pub struct Relay {
 }
 
 impl Relay {
+    /// Build a TON Cell from payload bytes (bitstring), preserving bit order.
+    fn payload_to_cell(payload: &[u8]) -> AnyResult<toner::tlb::Cell> {
+        use toner::tlb::bits::ser::BitWriterExt;
+        use subxt::ext::bitvec::view::AsBits;
+        let mut builder = toner::tlb::Cell::builder();
+        builder.pack(payload.as_bits())?;
+        Ok(builder.into_cell())
+    }
+
     #[inline]
     fn pending_nonces(inbound_nonce: u64, outbound_nonce: u64) -> Vec<u64> {
         if inbound_nonce >= outbound_nonce {
@@ -203,15 +212,48 @@ impl Relay {
     }
 
     async fn approve_and_send_commitment(&self, commitment: UnboundedGenericCommitment) -> AnyResult<()> {
-        match commitment {
-            UnboundedGenericCommitment::TON(_) => {
-                info!("Received TON commitment; outbound send skipped in this build");
-                Ok(())
-            }
-            _ => Err(anyhow::anyhow!(
-                "Invalid commitment. TON commitment is expected"
-            )),
+        use bridge_types::ton::Commitment as TonCommitment;
+        use crate::ton::contracts::channel::SendInboundMessage;
+
+        let UnboundedGenericCommitment::TON(commitment) = commitment else {
+            return Err(anyhow::anyhow!("Invalid commitment. TON commitment is expected"));
+        };
+
+        let TonCommitment::Outbound(outbound) = commitment else {
+            // Inbound commitment is not for Substrate→TON path
+            info!("Skip non-outbound TON commitment");
+            return Ok(());
+        };
+
+        // Iterate messages and submit each to the TON channel contract
+        for msg in outbound.messages {
+            // Map target address
+            let target = MsgAddress {
+                workchain_id: msg.target.workchain as i32,
+                address: msg.target.address.0,
+            };
+
+            // Build payload cell from raw payload bits
+            let payload_cell = Self::payload_to_cell(&msg.payload)?;
+
+            // Respect per-message fee ceiling if our configured value exceeds it
+            let max_fee: u128 = msg.max_fee.into();
+            let configured: u128 = self.value.clone().try_into().unwrap_or(u128::MAX);
+            let value = BigUint::from(configured.min(max_fee));
+
+            // Prepare and send the message
+            let body = SendInboundMessage {
+                target,
+                message: payload_cell,
+            };
+            let tx_hash = self
+                .ton
+                .submit(body, self.channel, value.clone(), self.bounce)
+                .await?;
+            info!("Submitted TON inbound message, tx={:?}", tx_hash);
         }
+
+        Ok(())
     }
 
     pub async fn run(self) -> AnyResult<()> {
@@ -276,5 +318,12 @@ mod tests {
         assert_eq!(Relay::pending_nonces(11, 10), Vec::<u64>::new());
         assert_eq!(Relay::pending_nonces(9, 10), vec![10]);
         assert_eq!(Relay::pending_nonces(8, 10), vec![9, 10]);
+    }
+
+    #[test]
+    fn test_payload_to_cell_roundtrip() {
+        let payload = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        let cell = Relay::payload_to_cell(&payload).expect("payload->cell");
+        assert_eq!(cell.data.as_raw_slice(), payload.as_slice());
     }
 }

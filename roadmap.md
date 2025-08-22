@@ -13,10 +13,14 @@ Use these prompts as starting points. Keep this list up to date as you deliver w
   - Prompt: Add module-level and function docs across `relayer/src/cli/bridge/**` to explain arguments, flows, and examples.
   - DoD: All public CLI commands show `--help` with clear descriptions; `relayer/AGENTS.md` references key subcommands.
 
-- Substrate → TON relay (enable end-to-end once runtime supports outbound)
-  - Prompt: Runtime currently does not emit TON outbound commitments. Keep relay loop scaffolded and ready; once pallets add TON outbound, wire the send path to build `SendInboundMessage` cells and submit via TON wallet.
-  - Details: Reuse `relayer/src/relay/ton/sub_messages.rs` structure; decode payload into TON cells and submit with configured value/bounce. Confirm channel get-methods and nonce handling.
-  - DoD: With runtime support present, `bridge relay sora ton` advances nonces and submits TON messages; `status.md` updated with “implemented”.
+- Substrate → TON relay [DONE]
+  - Prompt: Wire relay loop to build `SendInboundMessage` cells and submit via TON wallet.
+  - DoD: `bridge relay sora ton` advances nonces and submits TON messages. Status/docs updated.
+
+- Replace local path dependencies with released tags
+  - Prompt: The relayer uses local path overrides to `sora2-common` crates (types, bridge-common, beefy-light-client, leaf-provider-rpc) to access TON outbound support.
+  - Details: Publish or bump sora2-common tags that include TON outbound types; update `relayer/Cargo.toml` to use pinned tags and refresh `Cargo.lock`.
+  - DoD: No local path overrides; CI builds from tagged dependencies.
 
 ## P1 — Next
 
