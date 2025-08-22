@@ -975,29 +975,8 @@ name = "beefy-light-client"
 version = "0.1.0"
 dependencies = [
  "beefy-merkle-tree",
- "bridge-common 0.1.0",
- "bridge-types 0.1.0",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-beefy",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "beefy-light-client"
-version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
-dependencies = [
- "beefy-merkle-tree",
- "bridge-common 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
- "bridge-types 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
+ "bridge-common",
+ "bridge-types",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -1176,25 +1155,7 @@ name = "bridge-common"
 version = "0.1.0"
 dependencies = [
  "bitvec 1.0.1",
- "bridge-types 0.1.0",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-beefy",
- "sp-core",
- "sp-io",
- "sp-runtime",
-]
-
-[[package]]
-name = "bridge-common"
-version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
-dependencies = [
- "bitvec 1.0.1",
- "bridge-types 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
+ "bridge-types",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -1217,10 +1178,10 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "beefy-gadget-rpc",
- "beefy-light-client 0.1.0",
+ "beefy-light-client",
  "beefy-merkle-tree",
- "bridge-common 0.1.0",
- "bridge-types 0.1.0",
+ "bridge-common",
+ "bridge-types",
  "chrono",
  "ckb-merkle-mountain-range",
  "clap",
@@ -1303,36 +1264,6 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-bip39",
- "xcm",
-]
-
-[[package]]
-name = "bridge-types"
-version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
-dependencies = [
- "derivative",
- "ethabi 17.2.0",
- "ethash",
- "ethbloom",
- "ethereum-types",
- "frame-support",
- "frame-system",
- "getrandom 0.2.15",
- "hex-literal",
- "libsecp256k1",
- "orml-traits",
- "parity-bytes",
- "parity-scale-codec",
- "rlp",
- "rustc-hex",
- "scale-info",
- "serde",
- "sp-beefy",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
  "xcm",
 ]
 
@@ -1662,7 +1593,7 @@ version = "0.1.0"
 source = "git+https://github.com/sora-xor//sora2-network.git?tag=3.4.0#47a7f6d7dbe663d31d686d961786cfc9d239bf85"
 dependencies = [
  "blake2-rfc",
- "bridge-types 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
+ "bridge-types",
  "fixnum",
  "frame-support",
  "frame-system",
@@ -2714,18 +2645,6 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "17.2.0"
-source = "git+https://github.com/sora-xor/ethabi.git?branch=sora-v1.6.0#d4e99f047dfd525afa1a64992644727c89bdc368"
-dependencies = [
- "ethereum-types",
- "hex",
- "sha3",
- "thiserror 1.0.69",
- "uint",
-]
-
-[[package]]
-name = "ethabi"
 version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7413c5f74cc903ea37386a8965a936cbeb334bd270862fdece542c1b2dcbc898"
@@ -2896,7 +2815,7 @@ dependencies = [
  "chrono",
  "convert_case 0.6.0",
  "elliptic-curve 0.12.3",
- "ethabi 18.0.0",
+ "ethabi",
  "generic-array 0.14.7",
  "getrandom 0.2.15",
  "hex",
@@ -4704,7 +4623,7 @@ dependencies = [
 name = "leaf-provider-runtime-api"
 version = "0.1.0"
 dependencies = [
- "bridge-types 0.1.0",
+ "bridge-types",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -4724,8 +4643,8 @@ name = "liberland-gen"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bridge-common 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
- "bridge-types 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
+ "bridge-common",
+ "bridge-types",
  "common",
  "jsonrpsee",
  "parity-scale-codec",
@@ -6210,9 +6129,9 @@ name = "parachain-gen"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "beefy-light-client 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
- "bridge-common 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
- "bridge-types 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
+ "beefy-light-client",
+ "bridge-common",
+ "bridge-types",
  "common",
  "jsonrpsee",
  "parity-scale-codec",
@@ -9446,9 +9365,9 @@ name = "substrate-gen"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "beefy-light-client 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
- "bridge-common 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
- "bridge-types 0.1.0 (git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge)",
+ "beefy-light-client",
+ "bridge-common",
+ "bridge-types",
  "common",
  "jsonrpsee",
  "parity-scale-codec",
@@ -11827,21 +11746,6 @@ dependencies = [
 ]
 
 [[patch.unused]]
-name = "leaf-provider-rpc"
-version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
-
-[[patch.unused]]
-name = "leaf-provider-runtime-api"
-version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
-
-[[patch.unused]]
-name = "pallet-scheduler"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
 name = "pallet-scheduler"
 version = "4.0.0-dev"
 source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
@@ -11850,3 +11754,8 @@ source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#
 name = "orml-tokens"
 version = "0.4.1-dev"
 source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v0.9.38#241d5cdc98cca53b8cf990853943c9ae1193a70e"
+
+[[patch.unused]]
+name = "pallet-scheduler"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"

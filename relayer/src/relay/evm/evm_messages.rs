@@ -30,7 +30,7 @@
 
 use std::time::Duration;
 
-use bridge_types::evm::{BaseFeeUpdate, InboundCommitment, StatusReport};
+use bridge_types::evm::{BaseFeeUpdate, InboundCommitment};
 use bridge_types::{EVMChainId, GenericNetworkId};
 use sp_core::ecdsa;
 
@@ -94,7 +94,7 @@ impl SubstrateMessagesRelay {
         }
 
         self.handle_message_events(current_eth_block).await?;
-        self.handle_batch_dispatched(current_eth_block).await?;
+        // Status reports are no longer submitted as commitments.
         self.handle_base_fee_update(current_eth_block).await?;
 
         self.latest_channel_block = current_eth_block + 1;
@@ -206,68 +206,8 @@ impl SubstrateMessagesRelay {
         Ok(())
     }
 
-    /// Submit status reports from `BatchDispatched` events.
-    async fn handle_batch_dispatched(&mut self, current_eth_block: u64) -> AnyResult<()> {
-        let eth = self.eth.inner();
-        let inbound_channel = ethereum_gen::ChannelHandler::new(self.channel, eth.clone());
-        let events: Vec<(
-            ethereum_gen::channel_handler::BatchDispatchedFilter,
-            LogMeta,
-        )> = inbound_channel
-            .batch_dispatched_filter()
-            .from_block(self.latest_channel_block)
-            .to_block(current_eth_block)
-            .query_with_meta()
-            .await?;
-        debug!(
-            "Channel: Found {} BatchDispatched events from {} to {}",
-            events.len(),
-            self.latest_channel_block,
-            current_eth_block
-        );
-
-        let mut sub_reported_nonce = self
-            .sub
-            .storage_fetch_or_default(
-                &runtime::storage()
-                    .bridge_inbound_channel()
-                    .reported_channel_nonces(&self.evm_network_id),
-                (),
-            )
-            .await?;
-
-        for (event, meta) in events {
-            if event.batch_nonce.as_u64() == sub_reported_nonce + 1 && meta.address == self.channel
-            {
-                let results = Self::results_bitmap_to_vec(event.results, event.results_length.as_usize());
-                let commitment = UnboundedGenericCommitment::EVM(
-                    bridge_types::evm::Commitment::StatusReport(StatusReport {
-                        nonce: event.batch_nonce.as_u64(),
-                        base_fee: event.base_fee,
-                        gas_spent: event.gas_spent,
-                        relayer: event.relayer,
-                        results: results
-                            .try_into()
-                            .map_err(|_| anyhow::anyhow!("Invalid results length"))?,
-                        channel: meta.address,
-                        block_number: meta.block_number.as_u64(),
-                    }),
-                );
-                info!("Submitting status report: {:?}", commitment.nonce());
-                self.sub
-                    .submit_inbound_commitment(
-                        self.signer.clone(),
-                        self.evm_network_id,
-                        self.sub_network_id,
-                        commitment,
-                    )
-                    .await?;
-                sub_reported_nonce += 1;
-            }
-        }
-
-        Ok(())
-    }
+    // Previous implementation submitted StatusReport commitments from BatchDispatched events.
+    // That flow has been removed in current bridge types.
 
     /// Convert a bitmap of results (U256) with a given length into Vec<bool>.
     fn results_bitmap_to_vec(bitmap: U256, len: usize) -> Vec<bool> {

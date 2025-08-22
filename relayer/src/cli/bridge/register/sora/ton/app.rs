@@ -95,7 +95,7 @@ impl Command {
             } => runtime::runtime_types::framenode_runtime::RuntimeCall::JettonApp(
                 runtime::runtime_types::jetton_app::pallet::Call::register_network {
                     network_id: network.network(),
-                    contract: TonAddress::new(contract.workchain_id as i8, contract.address.into()),
+                    contract: TonAddress::new(contract.workchain_id as u8, contract.address.into()),
                     name: name.clone(),
                     symbol: symbol.clone(),
                     decimals: *precision,
@@ -109,7 +109,7 @@ impl Command {
             } => runtime::runtime_types::framenode_runtime::RuntimeCall::JettonApp(
                 runtime::runtime_types::jetton_app::pallet::Call::register_network_with_existing_asset {
                     network_id: network.network(),
-                    contract: TonAddress::new(contract.workchain_id as i8, contract.address.into()),
+                    contract: TonAddress::new(contract.workchain_id as u8, contract.address.into()),
                     asset_id: *asset_id,
                     decimals: *precision,
                 },
@@ -130,7 +130,7 @@ impl Command {
                 (contract, registered)
             }
         };
-        let contract = TonAddress::new(contract.workchain_id as i8, contract.address.into());
+        let contract = TonAddress::new(contract.workchain_id as u8, contract.address.into());
         if let Some((registered_network_id, registered_contract)) = registered {
             if registered_contract == contract {
                 info!("App already registered");

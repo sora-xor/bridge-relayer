@@ -17,8 +17,8 @@ This document summarizes what the workspace supports today, what’s partial, an
     - File: `relayer/src/relay/evm/evm_messages.rs`
     - Watches EVM channel (`ChannelHandler`) for:
       - `MessageDispatched` → submits `InboundCommitment` to Substrate inbound channel.
-      - `BatchDispatched` → submits status report to Substrate.
       - Periodic base-fee updates.
+    - Note: Status report submission from `BatchDispatched` events was removed; current bridge types no longer include that commitment.
     - Tracks and advances by finality; keeps `latest_channel_block` to bound queries.
   - Substrate → EVM: Implemented.
     - File: `relayer/src/relay/evm/sub_messages.rs`
@@ -89,11 +89,8 @@ This document summarizes what the workspace supports today, what’s partial, an
 
 ## Local Development Overrides
 
-- For local development, the relayer currently points to sibling `sora2-common` crates via path overrides in `relayer/Cargo.toml`:
-  - `beefy-light-client = { path = "../../sora2-common/pallets/beefy-light-client" }`
-  - `bridge-common = { path = "../../sora2-common/pallets/bridge-common" }`
-  - `bridge-types = { path = "../../sora2-common/pallets/types" }`
-  - `leaf-provider-rpc = { path = "../../sora2-common/pallets/leaf-provider/rpc" }`
+- For local development, the workspace patches `sora2-common` crates to a sibling checkout (see root `Cargo.toml` [patch] section) so all crates use the same local versions:
+  - `beefy-light-client`, `bridge-common`, `bridge-types`, `leaf-provider-rpc` are patched to `../sora2-common/pallets/*`.
 - This ensures the relayer builds against the version that contains TON outbound commitment types and related APIs.
 - Action: When releasing, replace these path dependencies with pinned tags in this repository’s `Cargo.toml` (or bump tags in sora2-common) and update `Cargo.lock`.
 

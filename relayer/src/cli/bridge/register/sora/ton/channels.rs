@@ -79,7 +79,7 @@ impl Command {
             let call = runtime::runtime_types::framenode_runtime::RuntimeCall::BridgeInboundChannel(
                 runtime::runtime_types::bridge_channel::inbound::pallet::Call::register_ton_channel {
                     network_id,
-                    channel_address: TonAddress::new(self.channel.workchain_id as i8, self.channel.address.into()),
+                    channel_address: TonAddress::new(self.channel.workchain_id as u8, self.channel.address.into()),
                 },
             );
             info!("Sudo call extrinsic: {:?}", call);

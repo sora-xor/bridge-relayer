@@ -144,7 +144,7 @@ impl Relay {
         }
     }
 
-    async fn messages(&self) -> AnyResult<Vec<Commitment<MaxU32>>> {
+    async fn messages(&self) -> AnyResult<Vec<Commitment<MaxU32, MaxU32>>> {
         let mut messages = vec![];
         let res = self
             .ton
@@ -167,11 +167,11 @@ impl Relay {
                                 bridge_types::ton::InboundCommitment {
                                     nonce: message.nonce,
                                     source: bridge_types::ton::TonAddress::new(
-                                        message.source.workchain_id as i8,
+                                        message.source.workchain_id as u8,
                                         message.source.address.into(),
                                     ),
                                     channel: bridge_types::ton::TonAddress::new(
-                                        msg.source.workchain_id as i8,
+                                        msg.source.workchain_id as u8,
                                         msg.source.address.into(),
                                     ),
                                     transaction_id: bridge_types::ton::TonTransactionId {
@@ -207,7 +207,7 @@ impl Relay {
         Ok(sub_nonce)
     }
 
-    async fn send(&self, commitment: Commitment<MaxU32>) -> AnyResult<()> {
+    async fn send(&self, commitment: Commitment<MaxU32, MaxU32>) -> AnyResult<()> {
         let commitment = UnboundedGenericCommitment::TON(commitment);
         self.sub
             .submit_inbound_commitment(
