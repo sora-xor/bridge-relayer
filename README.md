@@ -26,28 +26,31 @@ Secret phrase:       {secret phrase}
   SS58 Address:      5Gg5Ny9g1npyCyehdqRydYrPBBtX3iUo8Bq91YQ3GP4o4Xj3
 ```
 
-Save the secret phrases. Then Public Keys should be used to initialise the BridgeDataSighner and MultisigVerifier pallets
+Keep the secret phrases out of shell history when running relayers. Relay commands support
+`--signer-file /path/to/signer.seed`; the existing `--signer` flag is still accepted for
+backward compatibility. Public keys should be used to initialise the BridgeDataSighner and
+MultisigVerifier pallets.
 
 ### Run Federated SORA -> Liberland Relayer
 
 ```sh
-RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://{LIBERLAND_ADDRESS} --liberland-key {KEY_POSTFIX} --substrate-url ws://{SORA_ADDRESS} --substrate-key {KEY_POSTFIX} bridge relay sora liberland trusted --signer {YOUR_SEED}
+RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://{LIBERLAND_ADDRESS} --liberland-key {KEY_POSTFIX} --substrate-url ws://{SORA_ADDRESS} --substrate-key {KEY_POSTFIX} bridge relay sora liberland trusted --signer-file /path/to/signer.seed
 ```
 
 Example:
 
 ```sh
-RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://localhost:10999 --substrate-url ws://localhost:9944 bridge relay sora liberland trusted --signer "{secret phrase}"
+RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://localhost:10999 --substrate-url ws://localhost:9944 bridge relay sora liberland trusted --signer-file ./relayer.seed
 ```
 
 ### Run Federated Liberland -> SORA Relayer
 
 ```sh
-RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://{LIBERLAND_ADDRESS} --liberland-key {KEY_POSTFIX} --substrate-url ws://{SORA_ADDRESS}--substrate-key {KEY_POSTFIX} bridge relay liberland sora trusted --signer {YOUR_SEED}
+RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://{LIBERLAND_ADDRESS} --liberland-key {KEY_POSTFIX} --substrate-url ws://{SORA_ADDRESS} --substrate-key {KEY_POSTFIX} bridge relay liberland sora trusted --signer-file /path/to/signer.seed
 ```
 
 Example:
 
 ```sh
-RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://localhost:10999 --substrate-url ws://localhost:9944 bridge relay liberland sora trusted --signer "{secret phrase}"
+RUST_LOG=bridge_relayer=debug,info ./target/release/bridge-relayer --liberland-url ws://localhost:10999 --substrate-url ws://localhost:9944 bridge relay liberland sora trusted --signer-file ./relayer.seed
 ```

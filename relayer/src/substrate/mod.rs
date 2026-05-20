@@ -41,9 +41,8 @@ use std::sync::Arc;
 use crate::prelude::*;
 use bridge_types::types::AuxiliaryDigest;
 use bridge_types::GenericNetworkId;
-use common::{AssetName, AssetSymbol, Balance, ContentSource, Description};
-use mmr_rpc::MmrApiClient;
-use sp_core::{ecdsa, H256};
+use jsonrpsee::core::client::ClientT;
+use sp_core::{ecdsa, Bytes, H256};
 use sp_mmr_primitives::{EncodableOpaqueLeaf, Proof};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use std::sync::RwLock;
@@ -137,7 +136,26 @@ pub struct UnsignedClient<T: ConfigExt> {
     client: ClonableClient,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MmrLeavesProof<BlockHash> {
+    block_hash: BlockHash,
+    leaves: Bytes,
+    proof: Bytes,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubmissionOutcome {
+    Submitted,
+    AlreadyInPool,
+    TemporarilyBanned,
+}
+
 impl<T: ConfigExt> UnsignedClient<T> {
+    const POOL_TEMPORARILY_BANNED: i32 = 1012;
+    const POOL_ALREADY_IMPORTED: i32 = 1013;
+    const POOL_TOO_LOW_PRIORITY: i32 = 1014;
+
     pub async fn new(url: impl Into<String>) -> AnyResult<Self> {
         let url: Uri = url.into().parse()?;
         let (sender, receiver) =
@@ -154,49 +172,6 @@ impl<T: ConfigExt> UnsignedClient<T> {
 
     pub fn rpc(&self) -> &jsonrpsee::async_client::Client {
         &self.client.0
-    }
-
-    pub fn mmr(&self) -> &impl mmr_rpc::MmrApiClient<BlockHash<T>, BlockNumber<T>, MmrHash> {
-        self.rpc()
-    }
-
-    pub fn beefy(
-        &self,
-    ) -> &impl beefy_gadget_rpc::BeefyApiClient<types::EncodedBeefyCommitment, BlockHash<T>> {
-        self.rpc()
-    }
-
-    pub fn assets(
-        &self,
-    ) -> &impl assets_rpc::AssetsAPIClient<
-        BlockHash<T>,
-        AccountId<T>,
-        AssetId,
-        Balance,
-        Option<assets_runtime_api::BalanceInfo<Balance>>,
-        Option<
-            assets_runtime_api::AssetInfo<
-                AssetId,
-                AssetSymbol,
-                AssetName,
-                u8,
-                ContentSource,
-                Description,
-            >,
-        >,
-        Vec<
-            assets_runtime_api::AssetInfo<
-                AssetId,
-                AssetSymbol,
-                AssetName,
-                u8,
-                ContentSource,
-                Description,
-            >,
-        >,
-        Vec<AssetId>,
-    > {
-        self.rpc()
     }
 
     pub async fn auxiliary_digest(&self, at: Option<BlockHash<T>>) -> AnyResult<AuxiliaryDigest>
@@ -283,8 +258,11 @@ impl<T: ConfigExt> UnsignedClient<T> {
         BlockNumber<T>: Serialize,
     {
         let res = self
-            .mmr()
-            .generate_proof(vec![block_number], Some(at), None)
+            .rpc()
+            .request::<MmrLeavesProof<BlockHash<T>>, _>(
+                "mmr_generateProof",
+                (vec![block_number], Some(at), Option::<BlockHash<T>>::None),
+            )
             .await?;
 
         let enc_opaque_leaf = match Vec::<EncodableOpaqueLeaf>::decode(&mut res.leaves.as_ref()) {
@@ -450,21 +428,31 @@ impl<T: ConfigExt> UnsignedClient<T> {
         SignedClient::<T>::new(self, signer).await
     }
 
-    pub fn is_transaction_imported_or_banned(error: &subxt::Error) -> bool {
+    pub fn transaction_pool_submission_outcome(error: &subxt::Error) -> Option<SubmissionOutcome> {
         match error {
             subxt::Error::Rpc(subxt::error::RpcError::ClientError(error)) => {
                 let Some(error) = error.downcast_ref::<jsonrpsee::core::Error>() else {
-                    return false;
+                    return None;
                 };
                 match error {
                     jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
                         error,
-                    )) => error.code() == 1013 || error.code() == 1014,
-                    _ => false,
+                    )) => match error.code() {
+                        Self::POOL_TEMPORARILY_BANNED => Some(SubmissionOutcome::TemporarilyBanned),
+                        Self::POOL_ALREADY_IMPORTED | Self::POOL_TOO_LOW_PRIORITY => {
+                            Some(SubmissionOutcome::AlreadyInPool)
+                        }
+                        _ => None,
+                    },
+                    _ => None,
                 }
             }
-            _ => false,
+            _ => None,
         }
+    }
+
+    pub fn is_transaction_imported_or_banned(error: &subxt::Error) -> bool {
+        Self::transaction_pool_submission_outcome(error).is_some()
     }
 
     pub async fn submit_unsigned_extrinsic<P: subxt::tx::TxPayload>(
@@ -512,7 +500,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
     pub async fn submit_concurrent_unsigned_extrinsic<P: subxt::tx::TxPayload>(
         &self,
         xt: &P,
-    ) -> AnyResult<bool> {
+    ) -> AnyResult<SubmissionOutcome> {
         let result = self.submit_unsigned_extrinsic(xt).await;
         match result {
             Err(e) => {
@@ -520,13 +508,13 @@ impl<T: ConfigExt> UnsignedClient<T> {
                     error!("unexpected error: {:?}", e);
                     return Err(e);
                 };
-                if Self::is_transaction_imported_or_banned(subxt_error) {
-                    Ok(false)
+                if let Some(outcome) = Self::transaction_pool_submission_outcome(subxt_error) {
+                    Ok(outcome)
                 } else {
                     Err(e)
                 }
             }
-            Ok(()) => Ok(true),
+            Ok(()) => Ok(SubmissionOutcome::Submitted),
         }
     }
 }
@@ -670,10 +658,14 @@ impl UnsignedClient<MainnetConfig> {
                         .submit(sender, commitment, proof),
                 )
                 .await?;
-            if success {
-                info!("Commitment submitted by this relayer");
-            } else {
-                info!("Commitment will be submitted by another relayer");
+            match success {
+                SubmissionOutcome::Submitted => info!("Commitment submitted by this relayer"),
+                SubmissionOutcome::AlreadyInPool => {
+                    info!("Commitment will be submitted by another relayer")
+                }
+                SubmissionOutcome::TemporarilyBanned => {
+                    warn!("Commitment submission is temporarily banned; retrying after state check")
+                }
             }
         }
         Ok(())
@@ -691,12 +683,22 @@ impl UnsignedClient<MainnetConfig> {
         {
             info!("Sending approval");
             let signature = signer.sign_prehashed(&message.0);
-            self.submit_unsigned_extrinsic(
-                &runtime::tx()
-                    .bridge_data_signer()
-                    .approve(sender, message, signature),
-            )
-            .await?;
+            let submitted = self
+                .submit_concurrent_unsigned_extrinsic(
+                    &runtime::tx()
+                        .bridge_data_signer()
+                        .approve(sender, message, signature),
+                )
+                .await?;
+            match submitted {
+                SubmissionOutcome::Submitted => {}
+                SubmissionOutcome::AlreadyInPool => {
+                    info!("Approval will be submitted by another relayer or is already in the pool")
+                }
+                SubmissionOutcome::TemporarilyBanned => {
+                    warn!("Approval submission is temporarily banned; retrying after state check")
+                }
+            }
         }
         Ok(())
     }
@@ -770,5 +772,531 @@ impl UnsignedClient<MainnetConfig> {
             .into_iter()
             .collect();
         Ok(peers)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::substrate::traits::MainnetConfig;
+
+    type Client = UnsignedClient<MainnetConfig>;
+
+    fn jsonrpsee_call_error(code: i32, message: &str) -> jsonrpsee::core::Error {
+        jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorObject::owned(code, message, None::<()>),
+        ))
+    }
+
+    fn jsonrpsee_call_error_with_data(code: i32, message: &str) -> jsonrpsee::core::Error {
+        jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorObject::owned(
+                code,
+                message,
+                Some(serde_json::json!({
+                    "error": "pool-like text in data must not change classification",
+                    "message": "Transaction is temporarily banned",
+                })),
+            ),
+        ))
+    }
+
+    fn jsonrpsee_call_error_with_fake_pool_code_in_data(code: i32) -> jsonrpsee::core::Error {
+        jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorObject::owned(
+                code,
+                "outer error is not a transaction-pool duplicate",
+                Some(serde_json::json!({
+                    "code": 1012,
+                    "message": "Transaction is temporarily banned",
+                    "nested": {
+                        "code": 1013,
+                        "message": "Already Imported",
+                    },
+                })),
+            ),
+        ))
+    }
+
+    fn subxt_client_error(error: impl std::error::Error + Send + Sync + 'static) -> subxt::Error {
+        subxt::Error::Rpc(subxt::error::RpcError::ClientError(Box::new(error)))
+    }
+
+    fn subxt_pool_error(code: i32, message: &str) -> subxt::Error {
+        subxt_client_error(jsonrpsee_call_error(code, message))
+    }
+
+    #[derive(Debug)]
+    struct SourceWrappedError(jsonrpsee::core::Error);
+
+    impl std::fmt::Display for SourceWrappedError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "wrapped source error: {}", self.0)
+        }
+    }
+
+    impl std::error::Error for SourceWrappedError {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            Some(&self.0)
+        }
+    }
+
+    fn serialized_mmr_proof() -> serde_json::Value {
+        serde_json::to_value(MmrLeavesProof {
+            block_hash: H256::repeat_byte(1),
+            leaves: Bytes(vec![1, 2, 3]),
+            proof: Bytes(vec![4, 5, 6]),
+        })
+        .expect("MMR proof DTO should serialize")
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_missing_required_fields() {
+        for field in ["blockHash", "leaves", "proof"] {
+            let mut value = serialized_mmr_proof();
+            value
+                .as_object_mut()
+                .expect("serialized proof should be an object")
+                .remove(field);
+
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof without {field} must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_snake_case_block_hash() {
+        let mut value = serialized_mmr_proof();
+        let object = value
+            .as_object_mut()
+            .expect("serialized proof should be an object");
+        let block_hash = object.remove("blockHash").expect("blockHash should exist");
+        object.insert("block_hash".to_string(), block_hash);
+
+        assert!(serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err());
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_malformed_block_hash() {
+        for block_hash in [
+            serde_json::json!("0x1234"),
+            serde_json::json!("not-a-hash"),
+            serde_json::json!(null),
+            serde_json::json!(123),
+        ] {
+            let mut value = serialized_mmr_proof();
+            value
+                .as_object_mut()
+                .expect("serialized proof should be an object")
+                .insert("blockHash".to_string(), block_hash);
+
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof with malformed block hash must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_malformed_byte_fields() {
+        for field in ["leaves", "proof"] {
+            let mut value = serialized_mmr_proof();
+            value
+                .as_object_mut()
+                .expect("serialized proof should be an object")
+                .insert(field.to_string(), serde_json::json!(123));
+
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof with malformed {field} must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_null_byte_fields() {
+        for field in ["leaves", "proof"] {
+            let mut value = serialized_mmr_proof();
+            value
+                .as_object_mut()
+                .expect("serialized proof should be an object")
+                .insert(field.to_string(), serde_json::Value::Null);
+
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof with null {field} must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_non_object_json() {
+        for value in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!("not-an-object"),
+        ] {
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof must be an object"
+            );
+        }
+    }
+
+    #[test]
+    fn recognizes_duplicate_or_banned_pool_codes() {
+        for (code, message, outcome) in [
+            (
+                1012,
+                "Transaction is temporarily banned",
+                SubmissionOutcome::TemporarilyBanned,
+            ),
+            (1013, "Already Imported", SubmissionOutcome::AlreadyInPool),
+            (
+                1014,
+                "The transaction has too low priority to replace another transaction already in the pool.",
+                SubmissionOutcome::AlreadyInPool,
+            ),
+        ] {
+            let error = subxt_pool_error(code, message);
+            assert_eq!(
+                Client::transaction_pool_submission_outcome(&error),
+                Some(outcome),
+                "expected pool code {code} to classify to {outcome:?}"
+            );
+            assert!(
+                Client::is_transaction_imported_or_banned(&error),
+                "expected pool code {code} to be tolerated"
+            );
+        }
+    }
+
+    #[test]
+    fn recognizes_pool_codes_with_unexpected_messages_and_data() {
+        for code in [1012, 1013, 1014] {
+            let error = subxt_client_error(jsonrpsee_call_error_with_data(
+                code,
+                "unexpected upstream message",
+            ));
+            assert!(
+                Client::is_transaction_imported_or_banned(&error),
+                "expected pool code {code} to be tolerated independent of message/data"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_spoofed_messages_with_unrecognized_codes() {
+        for (code, message) in [
+            (1010, "Transaction is temporarily banned"),
+            (1011, "Transaction is temporarily banned"),
+            (1015, "Already Imported"),
+            (1016, "The transaction has too low priority to replace another transaction already in the pool."),
+            (9999, "Transaction is temporarily banned"),
+            (-32700, "Transaction is temporarily banned"),
+            (-32603, "Already Imported"),
+            (-32604, "The transaction has too low priority to replace another transaction already in the pool."),
+            (-32000, "Transaction is temporarily banned"),
+        ] {
+            let error = subxt_pool_error(code, message);
+            assert!(
+                Client::transaction_pool_submission_outcome(&error).is_none(),
+                "unexpectedly tolerated spoofed pool message with code {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_near_miss_pool_codes_around_the_allowed_range() {
+        for code in 1008..=1018 {
+            if [1012, 1013, 1014].contains(&code) {
+                continue;
+            }
+
+            for message in [
+                "Transaction is temporarily banned",
+                "Already Imported",
+                "The transaction has too low priority to replace another transaction already in the pool.",
+            ] {
+                let error = subxt_pool_error(code, message);
+                assert_eq!(
+                    Client::transaction_pool_submission_outcome(&error),
+                    None,
+                    "unexpectedly tolerated near-miss pool code {code}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_pool_codes_hidden_in_jsonrpc_data() {
+        for code in [-32700, -32603, -32000, 0, 1011, 1015] {
+            let error = subxt_client_error(jsonrpsee_call_error_with_fake_pool_code_in_data(code));
+            assert!(
+                !Client::is_transaction_imported_or_banned(&error),
+                "unexpectedly tolerated fake nested pool code under outer code {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_extreme_codes_even_with_pool_like_messages() {
+        for code in [i32::MIN, -1, 0, 1, 1000, 10_120, i32::MAX] {
+            for message in [
+                "Transaction is temporarily banned",
+                "Already Imported",
+                "The transaction has too low priority to replace another transaction already in the pool.",
+            ] {
+                let error = subxt_pool_error(code, message);
+                assert!(
+                    !Client::is_transaction_imported_or_banned(&error),
+                    "unexpectedly tolerated extreme or unrelated code {code}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_non_custom_jsonrpsee_call_errors() {
+        let failed_call = jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Failed(
+            anyhow!("Transaction is temporarily banned"),
+        ));
+        let invalid_params = jsonrpsee::core::Error::Call(
+            jsonrpsee::types::error::CallError::InvalidParams(anyhow!("Already Imported")),
+        );
+
+        for error in [
+            subxt_client_error(failed_call),
+            subxt_client_error(invalid_params),
+        ] {
+            assert!(!Client::is_transaction_imported_or_banned(&error));
+        }
+    }
+
+    #[test]
+    fn rejects_jsonrpsee_non_call_errors_with_pool_like_text() {
+        for error in [
+            jsonrpsee::core::Error::Custom("Transaction is temporarily banned".to_string()),
+            jsonrpsee::core::Error::Custom("Already Imported".to_string()),
+            jsonrpsee::core::Error::RequestTimeout,
+            jsonrpsee::core::Error::MethodNotFound("author_submitAndWatchExtrinsic".to_string()),
+            jsonrpsee::core::Error::InvalidSubscriptionId,
+        ] {
+            assert!(!Client::is_transaction_imported_or_banned(
+                &subxt_client_error(error)
+            ));
+        }
+    }
+
+    #[test]
+    fn rejects_additional_jsonrpsee_non_pool_variants() {
+        for error in [
+            jsonrpsee::core::Error::Transport(anyhow!("Transaction is temporarily banned")),
+            jsonrpsee::core::Error::RestartNeeded("Already Imported".to_string()),
+            jsonrpsee::core::Error::InvalidRequestId,
+            jsonrpsee::core::Error::DuplicateRequestId,
+            jsonrpsee::core::Error::MethodAlreadyRegistered(
+                "author_submitAndWatchExtrinsic".to_string(),
+            ),
+            jsonrpsee::core::Error::SubscriptionNameConflict(
+                "author_submitAndWatchExtrinsic".to_string(),
+            ),
+            jsonrpsee::core::Error::MaxSlotsExceeded,
+            jsonrpsee::core::Error::HttpNotImplemented,
+            jsonrpsee::core::Error::EmptyBatchRequest,
+        ] {
+            assert!(!Client::is_transaction_imported_or_banned(
+                &subxt_client_error(error)
+            ));
+        }
+    }
+
+    #[test]
+    fn rejects_non_jsonrpsee_client_errors_with_pool_like_text() {
+        let io_error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Transaction is temporarily banned",
+        );
+        let error = subxt_client_error(io_error);
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn rejects_source_wrapped_jsonrpsee_client_errors() {
+        let wrapped = SourceWrappedError(jsonrpsee_call_error(
+            1012,
+            "Transaction is temporarily banned",
+        ));
+        let error = subxt_client_error(wrapped);
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn rejects_pool_codes_encoded_only_in_plaintext_client_errors() {
+        for message in [
+            "Custom error: code=1012 message='Transaction is temporarily banned'",
+            "JSON-RPC error 1013: Already Imported",
+            "1014: The transaction has too low priority to replace another transaction already in the pool.",
+            r#"{"code":1012,"message":"Transaction is temporarily banned"}"#,
+            r#"{"error":{"code":1013,"message":"Already Imported"}}"#,
+        ] {
+            let error = subxt_client_error(std::io::Error::new(std::io::ErrorKind::Other, message));
+
+            assert_eq!(Client::transaction_pool_submission_outcome(&error), None);
+        }
+    }
+
+    #[test]
+    fn rejects_pool_codes_when_outer_jsonrpc_code_is_server_error() {
+        for outer_code in [-32099, -32000, -32603] {
+            for hidden_code in [1012, 1013, 1014] {
+                let error = subxt_client_error(jsonrpsee::core::Error::Call(
+                    jsonrpsee::types::error::CallError::Custom(
+                        jsonrpsee::types::error::ErrorObject::owned(
+                            outer_code,
+                            "server error with misleading pool details",
+                            Some(serde_json::json!({
+                                "code": hidden_code,
+                                "message": "Already Imported",
+                            })),
+                        ),
+                    ),
+                ));
+
+                assert_eq!(
+                    Client::transaction_pool_submission_outcome(&error),
+                    None,
+                    "unexpectedly trusted hidden pool code {hidden_code} under outer code {outer_code}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_pool_codes_hidden_in_stringified_jsonrpc_data() {
+        for outer_code in [-32099, -32000, -32603, 1011, 1015] {
+            let error = subxt_client_error(jsonrpsee::core::Error::Call(
+                jsonrpsee::types::error::CallError::Custom(
+                    jsonrpsee::types::error::ErrorObject::owned(
+                        outer_code,
+                        "outer code must be authoritative",
+                        Some(r#"{"code":1012,"message":"Transaction is temporarily banned"}"#),
+                    ),
+                ),
+            ));
+
+            assert_eq!(
+                Client::transaction_pool_submission_outcome(&error),
+                None,
+                "unexpectedly trusted stringified JSON data under outer code {outer_code}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_pool_codes_hidden_in_array_jsonrpc_data() {
+        for outer_code in [-32000, 0, 1011, 1015] {
+            let error = subxt_client_error(jsonrpsee::core::Error::Call(
+                jsonrpsee::types::error::CallError::Custom(
+                    jsonrpsee::types::error::ErrorObject::owned(
+                        outer_code,
+                        "outer code must be authoritative",
+                        Some(serde_json::json!([
+                            {"code": 1012, "message": "Transaction is temporarily banned"},
+                            {"code": 1013, "message": "Already Imported"}
+                        ])),
+                    ),
+                ),
+            ));
+
+            assert_eq!(
+                Client::transaction_pool_submission_outcome(&error),
+                None,
+                "unexpectedly trusted array JSON data under outer code {outer_code}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_jsonrpc_parse_and_protocol_error_codes_with_pool_data() {
+        for error_object in [
+            jsonrpsee::types::error::ErrorObject::owned(
+                -32700,
+                "Transaction is temporarily banned",
+                Some(serde_json::json!({
+                    "code": 1012,
+                    "message": "Transaction is temporarily banned",
+                })),
+            ),
+            jsonrpsee::types::error::ErrorObject::owned(
+                -32600,
+                "Already Imported",
+                Some(serde_json::json!({
+                    "code": 1013,
+                    "message": "Already Imported",
+                })),
+            ),
+        ] {
+            let error = subxt_client_error(jsonrpsee::core::Error::Call(
+                jsonrpsee::types::error::CallError::Custom(error_object),
+            ));
+
+            assert_eq!(Client::transaction_pool_submission_outcome(&error), None);
+        }
+    }
+
+    #[test]
+    fn rejects_rpc_subscription_dropped() {
+        let error = subxt::Error::Rpc(subxt::error::RpcError::SubscriptionDropped);
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn rejects_transaction_validity_errors() {
+        use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
+
+        let error =
+            subxt::Error::Invalid(TransactionValidityError::Invalid(InvalidTransaction::Stale));
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn rejects_serialization_and_metadata_independent_subxt_errors() {
+        let serialization_error =
+            serde_json::from_str::<serde_json::Value>("not-json").expect_err("invalid json");
+        let errors = [
+            subxt::Error::Serialization(serialization_error),
+            subxt::Error::Metadata(subxt::error::MetadataError::IncompatibleMetadata),
+            subxt::Error::Other("Already Imported".to_string()),
+        ];
+
+        for error in errors {
+            assert!(!Client::is_transaction_imported_or_banned(&error));
+        }
+    }
+
+    #[test]
+    fn rejects_non_rpc_subxt_errors_with_pool_like_text() {
+        let error = subxt::Error::Other("Transaction is temporarily banned".to_string());
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn detects_context_wrapped_pool_errors_after_submit_failure() {
+        let error = anyhow::Error::new(subxt_pool_error(1012, "Transaction is temporarily banned"))
+            .context("sign and submit then watch");
+
+        let subxt_error = error
+            .downcast_ref::<subxt::Error>()
+            .expect("context should preserve the wrapped subxt error");
+
+        assert!(Client::is_transaction_imported_or_banned(subxt_error));
     }
 }

@@ -60,9 +60,12 @@ pub struct TonClient {
 
 impl TonClient {
     pub fn new(base: Url, api_key: Option<String>) -> AnyResult<Self> {
-        let mut headers = http::HeaderMap::new();
+        let mut headers = reqwest::header::HeaderMap::new();
         if let Some(api_key) = api_key {
-            headers.insert("X-API-Key", http::HeaderValue::from_str(&api_key)?);
+            headers.insert(
+                "X-API-Key",
+                reqwest::header::HeaderValue::from_str(&api_key)?,
+            );
         }
         Ok(Self {
             base: base.join("api/v2/")?,
@@ -184,6 +187,37 @@ impl TonClient {
     pub async fn send_boc_return_hash(&self, boc: Vec<u8>) -> AnyResult<SendBocResultHash> {
         self.post_request("sendBocReturnHash", &SendBoc { boc })
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ton_client_rejects_invalid_api_key_header() {
+        for api_key in ["bad\nkey", "bad\rkey", "bad\0key"] {
+            let err = TonClient::new(
+                Url::parse("https://ton.example/").expect("valid test URL"),
+                Some(api_key.to_string()),
+            )
+            .err()
+            .expect("invalid API key header must fail");
+
+            assert!(!err.to_string().is_empty());
+        }
+    }
+
+    #[test]
+    fn ton_client_rejects_base_url_that_cannot_join_api_path() {
+        let err = TonClient::new(
+            Url::parse("mailto:ton@example.com").expect("valid opaque URL"),
+            None,
+        )
+        .err()
+        .expect("opaque base URL must fail");
+
+        assert!(!err.to_string().is_empty());
     }
 }
 

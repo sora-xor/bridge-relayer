@@ -46,6 +46,30 @@ pub struct MessageCommitmentWithProof<S: SenderConfig> {
     pub proof: bridge_common::simplified_proof::Proof<H256>,
 }
 
+fn digest_item_matches(
+    log: &AuxiliaryDigestItem,
+    network_id: GenericNetworkId,
+    commitment_hash: H256,
+) -> bool {
+    matches!(
+        log,
+        AuxiliaryDigestItem::Commitment(digest_network_id, digest_commitment_hash)
+            if *digest_network_id == network_id && *digest_commitment_hash == commitment_hash
+    )
+}
+
+fn matching_digest_items(
+    digest: &AuxiliaryDigest,
+    network_id: GenericNetworkId,
+    commitment_hash: H256,
+) -> usize {
+    digest
+        .logs
+        .iter()
+        .filter(|log| digest_item_matches(log, network_id, commitment_hash))
+        .count()
+}
+
 pub async fn load_digest<S: SenderConfig>(
     sender: &SubUnsignedClient<S>,
     network_id: GenericNetworkId,
@@ -57,18 +81,7 @@ pub async fn load_digest<S: SenderConfig>(
     if digest.logs.is_empty() {
         return Err(anyhow!("Digest is empty"));
     }
-    let valid_items = digest
-        .logs
-        .iter()
-        .filter(|log| {
-            let AuxiliaryDigestItem::Commitment(digest_network_id, digest_commitment_hash) = log;
-            if network_id != *digest_network_id && commitment_hash != *digest_commitment_hash {
-                false
-            } else {
-                true
-            }
-        })
-        .count();
+    let valid_items = matching_digest_items(&digest, network_id, commitment_hash);
     if valid_items != 1 {
         return Err(anyhow!(
             "Expected digest for commitment not found: {:?}",
@@ -144,4 +157,158 @@ async fn leaf_proof_with_digest<S: SenderConfig>(
         }
     }
     return Err(anyhow::anyhow!("leaf proof not found"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bridge_types::ton::TonNetworkId;
+    use bridge_types::SubNetworkId;
+
+    #[test]
+    fn digest_item_matches_only_when_network_and_hash_match() {
+        let network_id = GenericNetworkId::EVM(H256::repeat_byte(10));
+        let commitment_hash = H256::repeat_byte(1);
+        let different_network = GenericNetworkId::EVM(H256::repeat_byte(20));
+        let different_hash = H256::repeat_byte(2);
+
+        assert!(digest_item_matches(
+            &AuxiliaryDigestItem::Commitment(network_id, commitment_hash),
+            network_id,
+            commitment_hash
+        ));
+        assert!(!digest_item_matches(
+            &AuxiliaryDigestItem::Commitment(different_network, commitment_hash),
+            network_id,
+            commitment_hash
+        ));
+        assert!(!digest_item_matches(
+            &AuxiliaryDigestItem::Commitment(network_id, different_hash),
+            network_id,
+            commitment_hash
+        ));
+        assert!(!digest_item_matches(
+            &AuxiliaryDigestItem::Commitment(different_network, different_hash),
+            network_id,
+            commitment_hash
+        ));
+    }
+
+    #[test]
+    fn digest_match_count_ignores_partial_matches_and_counts_duplicates() {
+        let network_id = GenericNetworkId::EVM(H256::repeat_byte(10));
+        let commitment_hash = H256::repeat_byte(1);
+        let digest = AuxiliaryDigest {
+            logs: vec![
+                AuxiliaryDigestItem::Commitment(network_id, commitment_hash),
+                AuxiliaryDigestItem::Commitment(network_id, H256::repeat_byte(2)),
+                AuxiliaryDigestItem::Commitment(
+                    GenericNetworkId::EVM(H256::repeat_byte(20)),
+                    commitment_hash,
+                ),
+                AuxiliaryDigestItem::Commitment(network_id, commitment_hash),
+            ],
+        };
+
+        assert_eq!(
+            matching_digest_items(&digest, network_id, commitment_hash),
+            2
+        );
+    }
+
+    #[test]
+    fn digest_match_count_rejects_cross_network_variants_with_same_hash() {
+        let network_id = GenericNetworkId::EVM(H256::repeat_byte(10));
+        let commitment_hash = H256::repeat_byte(1);
+        let digest = AuxiliaryDigest {
+            logs: vec![
+                AuxiliaryDigestItem::Commitment(
+                    GenericNetworkId::Sub(SubNetworkId::Mainnet),
+                    commitment_hash,
+                ),
+                AuxiliaryDigestItem::Commitment(GenericNetworkId::EVMLegacy(10), commitment_hash),
+                AuxiliaryDigestItem::Commitment(
+                    GenericNetworkId::TON(TonNetworkId::Mainnet),
+                    commitment_hash,
+                ),
+            ],
+        };
+
+        assert_eq!(
+            matching_digest_items(&digest, network_id, commitment_hash),
+            0
+        );
+    }
+
+    #[test]
+    fn digest_match_count_is_zero_for_empty_digest() {
+        let network_id = GenericNetworkId::EVM(H256::repeat_byte(10));
+        let commitment_hash = H256::repeat_byte(1);
+        let digest = AuxiliaryDigest { logs: vec![] };
+
+        assert_eq!(
+            matching_digest_items(&digest, network_id, commitment_hash),
+            0
+        );
+    }
+
+    #[test]
+    fn digest_match_count_is_exactly_one_when_noise_surrounds_single_match() {
+        let network_id = GenericNetworkId::EVM(H256::repeat_byte(10));
+        let commitment_hash = H256::repeat_byte(1);
+        let digest = AuxiliaryDigest {
+            logs: vec![
+                AuxiliaryDigestItem::Commitment(network_id, H256::repeat_byte(0)),
+                AuxiliaryDigestItem::Commitment(GenericNetworkId::EVMLegacy(10), commitment_hash),
+                AuxiliaryDigestItem::Commitment(network_id, commitment_hash),
+                AuxiliaryDigestItem::Commitment(
+                    GenericNetworkId::Sub(SubNetworkId::Liberland),
+                    H256::repeat_byte(0),
+                ),
+            ],
+        };
+
+        assert_eq!(
+            matching_digest_items(&digest, network_id, commitment_hash),
+            1
+        );
+    }
+
+    #[test]
+    fn digest_item_does_not_coerce_between_evm_and_legacy_evm_ids() {
+        let commitment_hash = H256::repeat_byte(1);
+        let evm_id = GenericNetworkId::EVM(H256::repeat_byte(10));
+        let legacy_id = GenericNetworkId::EVMLegacy(10);
+
+        assert!(!digest_item_matches(
+            &AuxiliaryDigestItem::Commitment(evm_id, commitment_hash),
+            legacy_id,
+            commitment_hash
+        ));
+        assert!(!digest_item_matches(
+            &AuxiliaryDigestItem::Commitment(legacy_id, commitment_hash),
+            evm_id,
+            commitment_hash
+        ));
+    }
+
+    #[test]
+    fn digest_match_count_rejects_same_hash_across_ton_networks() {
+        let commitment_hash = H256::repeat_byte(1);
+        let digest = AuxiliaryDigest {
+            logs: vec![AuxiliaryDigestItem::Commitment(
+                GenericNetworkId::TON(TonNetworkId::Mainnet),
+                commitment_hash,
+            )],
+        };
+
+        assert_eq!(
+            matching_digest_items(
+                &digest,
+                GenericNetworkId::TON(TonNetworkId::Testnet),
+                commitment_hash,
+            ),
+            0
+        );
+    }
 }

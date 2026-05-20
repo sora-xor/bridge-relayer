@@ -37,20 +37,15 @@ pub(crate) struct Command {
     sub: SubstrateClient,
     #[clap(flatten)]
     eth: EvmClient,
-    /// Signer for bridge messages
-    #[clap(long)]
-    signer: Option<String>,
+    #[clap(flatten)]
+    signer: BridgeSigner,
 }
 
 impl Command {
     pub async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_evm().await?;
         let sub = self.sub.get_unsigned_substrate().await?;
-        let signer = if let Some(signer) = &self.signer {
-            Some(sp_core::ecdsa::Pair::from_string(signer, None)?)
-        } else {
-            None
-        };
+        let signer = self.signer.get_optional_pair()?;
         let network_id = either::for_both!(&eth, e => e.chainid().await.context("fetch chain id")?);
         let channel_address = loop {
             let channel_address = sub

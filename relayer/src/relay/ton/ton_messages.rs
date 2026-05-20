@@ -45,6 +45,9 @@ use toner::{
     ton::MsgAddress,
 };
 
+const TON_TX_PAGE_LIMIT: u32 = 100;
+const TON_TX_MAX_PAGES: usize = 500;
+
 #[derive(Default)]
 pub struct RelayBuilder {
     sub: Option<SubUnsignedClient<MainnetConfig>>,
@@ -142,53 +145,104 @@ impl Relay {
         }
     }
 
-    async fn messages(&self) -> AnyResult<Vec<Commitment<MaxU32>>> {
-        let mut messages = vec![];
-        let res = self
-            .ton
-            .get_transactions(self.channel, None, None, None, Some(true))
-            .await?;
-        for tx in res {
-            for msg in tx.out_msgs {
-                if msg.source != self.channel || msg.destination.is_some() {
-                    continue;
-                }
-                if let crate::ton::types::MessageData::Raw { body, .. } = msg.msg_data {
-                    let body = toner::ton::boc::BagOfCells::unpack(body.as_bits())?
-                        .single_root()
-                        .cloned()
-                        .ok_or(anyhow!("Wrong BoC"))?;
-                    match crate::ton::contracts::channel::OutboundMessage::parse(&mut body.parser())
-                    {
-                        Ok(message) => {
-                            messages.push(Commitment::Inbound(
-                                bridge_types::ton::InboundCommitment {
-                                    nonce: message.nonce,
-                                    source: bridge_types::ton::TonAddress::new(
-                                        message.source.workchain_id as i8,
-                                        message.source.address.into(),
-                                    ),
-                                    channel: bridge_types::ton::TonAddress::new(
-                                        msg.source.workchain_id as i8,
-                                        msg.source.address.into(),
-                                    ),
-                                    transaction_id: bridge_types::ton::TonTransactionId {
-                                        lt: tx.transaction_id.lt,
-                                        hash: tx.transaction_id.hash.into(),
-                                    },
-                                    payload: BoundedVec::truncate_from(
-                                        message.message.data.as_raw_slice().to_vec(),
-                                    ),
+    fn collect_messages_from_transaction(
+        &self,
+        tx: &crate::ton::types::Transaction,
+        first_nonce: u64,
+        last_nonce: u64,
+        messages: &mut BTreeMap<u64, Commitment<MaxU32>>,
+    ) -> AnyResult<()> {
+        for msg in &tx.out_msgs {
+            if msg.source != self.channel || msg.destination.is_some() {
+                continue;
+            }
+            if let crate::ton::types::MessageData::Raw { body, .. } = &msg.msg_data {
+                let body = toner::ton::boc::BagOfCells::unpack(body.as_bits())?
+                    .single_root()
+                    .cloned()
+                    .ok_or(anyhow!("Wrong BoC"))?;
+                match crate::ton::contracts::channel::OutboundMessage::parse(&mut body.parser()) {
+                    Ok(message) => {
+                        if message.nonce < first_nonce || message.nonce > last_nonce {
+                            continue;
+                        }
+                        messages.entry(message.nonce).or_insert_with(|| {
+                            Commitment::Inbound(bridge_types::ton::InboundCommitment {
+                                nonce: message.nonce,
+                                source: bridge_types::ton::TonAddress::new(
+                                    message.source.workchain_id as i8,
+                                    message.source.address.into(),
+                                ),
+                                channel: bridge_types::ton::TonAddress::new(
+                                    msg.source.workchain_id as i8,
+                                    msg.source.address.into(),
+                                ),
+                                transaction_id: bridge_types::ton::TonTransactionId {
+                                    lt: tx.transaction_id.lt,
+                                    hash: tx.transaction_id.hash.into(),
                                 },
-                            ));
-                        }
-                        Err(err) => {
-                            log::warn!("Failed to parse body: {err:?}");
-                        }
+                                payload: BoundedVec::truncate_from(
+                                    message.message.data.as_raw_slice().to_vec(),
+                                ),
+                            })
+                        });
+                    }
+                    Err(err) => {
+                        log::warn!("Failed to parse body: {err:?}");
                     }
                 }
             }
         }
+        Ok(())
+    }
+
+    async fn messages(
+        &self,
+        first_nonce: u64,
+        last_nonce: u64,
+    ) -> AnyResult<BTreeMap<u64, Commitment<MaxU32>>> {
+        let mut messages = BTreeMap::new();
+        let expected_count = last_nonce.saturating_sub(first_nonce).saturating_add(1);
+        let mut last_tx = None;
+
+        for page in 0..TON_TX_MAX_PAGES {
+            let transactions = self
+                .ton
+                .get_transactions(
+                    self.channel,
+                    Some(TON_TX_PAGE_LIMIT),
+                    last_tx,
+                    None,
+                    Some(true),
+                )
+                .await?;
+
+            if transactions.is_empty() {
+                break;
+            }
+
+            for tx in &transactions {
+                self.collect_messages_from_transaction(tx, first_nonce, last_nonce, &mut messages)?;
+            }
+
+            if messages.len() as u64 >= expected_count {
+                break;
+            }
+
+            let has_more = transactions.len() == TON_TX_PAGE_LIMIT as usize;
+            last_tx = transactions.last().map(|tx| tx.transaction_id.clone());
+            if !has_more {
+                break;
+            }
+
+            debug!(
+                "Loaded TON transactions page {}, found {}/{} pending messages",
+                page + 1,
+                messages.len(),
+                expected_count
+            );
+        }
+
         Ok(messages)
     }
 
@@ -226,10 +280,9 @@ impl Relay {
             let ton_nonce = self.ton_nonce().await?;
             info!("Nonces - TON: {}, SORA: {}", ton_nonce, sub_nonce);
             if ton_nonce > sub_nonce {
-                let mut found_messages = BTreeMap::new();
-                for message in self.messages().await? {
-                    found_messages.insert(message.nonce(), message);
-                }
+                let mut found_messages = self
+                    .messages(sub_nonce.saturating_add(1), ton_nonce)
+                    .await?;
                 while sub_nonce < ton_nonce {
                     sub_nonce += 1;
                     let message = found_messages.remove(&sub_nonce).ok_or(anyhow!(

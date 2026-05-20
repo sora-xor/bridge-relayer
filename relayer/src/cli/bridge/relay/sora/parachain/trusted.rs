@@ -28,8 +28,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use sp_core::ecdsa;
-
 use crate::cli::prelude::*;
 use crate::relay::multisig_messages::RelayBuilder;
 
@@ -39,15 +37,15 @@ pub(crate) struct Command {
     sub: SubstrateClient,
     #[clap(flatten)]
     para: ParachainClient,
-    #[clap(long)]
-    signer: String,
+    #[clap(flatten)]
+    signer: BridgeSigner,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let sender = self.sub.get_unsigned_substrate().await?;
         let receiver = self.para.get_unsigned_substrate().await?;
-        let signer = ecdsa::Pair::from_string(&self.signer, None)?;
+        let signer = self.signer.get_pair()?;
         let messages_relay = RelayBuilder::new()
             .with_sender_client(sender)
             .with_receiver_client(receiver)

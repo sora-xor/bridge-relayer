@@ -50,6 +50,12 @@ pub type UnsignedClientInner = Provider<UniversalClient>;
 
 pub type UnsignedOrSignedClient = Either<UnsignedClient, SignedClient>;
 
+fn signing_key_from_hex(key: &str) -> AnyResult<SigningKey> {
+    Ok(SigningKey::from_slice(
+        hex::decode(key.trim()).context("hex decode")?.as_slice(),
+    )?)
+}
+
 #[derive(Clone, Debug)]
 pub struct UnsignedClient(Arc<UnsignedClientInner>);
 
@@ -87,8 +93,7 @@ impl UnsignedClient {
         key: &str,
         gas_metrics: Option<PathBuf>,
     ) -> AnyResult<SignedClient> {
-        let key =
-            SigningKey::from_bytes(hex::decode(key.trim()).context("hex decode")?.as_slice())?;
+        let key = signing_key_from_hex(key)?;
         Ok(self.signed(key, gas_metrics).await?)
     }
 
@@ -111,6 +116,52 @@ impl UnsignedClient {
         let block_number = block.number.ok_or(anyhow!("Block number not found"))?;
 
         Ok(block_number.as_u64())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VALID_PRIVATE_KEY: &str =
+        "59c6995e998f97a5a004497e5da37d37f9e4222e6fb12734712cbf601cadd2b1";
+
+    #[test]
+    fn signing_key_from_hex_accepts_surrounding_ascii_whitespace() {
+        let trimmed = signing_key_from_hex(VALID_PRIVATE_KEY).unwrap();
+        let padded = signing_key_from_hex(&format!("\n\t{VALID_PRIVATE_KEY}\r\n")).unwrap();
+
+        assert_eq!(
+            trimmed.verifying_key().to_encoded_point(false).as_bytes(),
+            padded.verifying_key().to_encoded_point(false).as_bytes()
+        );
+    }
+
+    #[test]
+    fn signing_key_from_hex_rejects_malformed_hex() {
+        for key in ["", "0x1234", "not-hex", "abc", "12 34"] {
+            assert!(
+                signing_key_from_hex(key).is_err(),
+                "malformed EVM signer key {key:?} must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn signing_key_from_hex_rejects_wrong_byte_lengths() {
+        for key in ["00".to_string(), "00".repeat(31), "00".repeat(33)] {
+            assert!(
+                signing_key_from_hex(&key).is_err(),
+                "wrong-length EVM signer key must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn signing_key_from_hex_rejects_zero_scalar() {
+        let zero_key = "00".repeat(32);
+
+        assert!(signing_key_from_hex(&zero_key).is_err());
     }
 }
 
@@ -160,7 +211,7 @@ impl SignedClient {
         additional: &str,
     ) -> AnyResult<()>
     where
-        D: abi::Detokenize + core::fmt::Debug,
+        D: abi::Detokenize + std::fmt::Debug,
         M: Middleware + 'static,
     {
         use std::io::Write;

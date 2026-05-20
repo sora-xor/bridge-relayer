@@ -35,7 +35,7 @@ use std::collections::BTreeSet;
 
 use crate::prelude::*;
 use crate::relay::messages_subscription::load_digest;
-use crate::substrate::{BlockNumberOrHash, OtherParams};
+use crate::substrate::{BlockNumberOrHash, OtherParams, SubmissionOutcome};
 use bridge_types::types::AuxiliaryDigest;
 use bridge_types::{GenericNetworkId, SubNetworkId, H256};
 use sp_core::ecdsa;
@@ -240,7 +240,23 @@ where
                         digest_hash,
                         signature,
                     );
-                    self.sender.submit_unsigned_extrinsic(&call).await?;
+                    let submitted = self
+                        .sender
+                        .submit_concurrent_unsigned_extrinsic(&call)
+                        .await?;
+                    match submitted {
+                        SubmissionOutcome::Submitted => {}
+                        SubmissionOutcome::AlreadyInPool => {
+                            info!(
+                                "Approval will be submitted by another relayer or is already in the pool"
+                            );
+                        }
+                        SubmissionOutcome::TemporarilyBanned => {
+                            warn!(
+                                "Approval submission is temporarily banned; retrying after state check"
+                            );
+                        }
+                    }
                 }
                 let approvals = self.approvals(digest_hash).await?;
                 if (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32) {

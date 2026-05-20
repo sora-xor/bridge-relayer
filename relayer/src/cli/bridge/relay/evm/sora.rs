@@ -39,16 +39,15 @@ pub(crate) struct Command {
     sub: SubstrateClient,
     #[clap(flatten)]
     eth: EvmClient,
-    /// Signer for bridge messages
-    #[clap(long)]
-    signer: String,
+    #[clap(flatten)]
+    signer: BridgeSigner,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let eth = self.eth.get_unsigned_evm().await?;
         let sub = self.sub.get_unsigned_substrate().await?;
-        let signer = sp_core::ecdsa::Pair::from_string(&self.signer, None)?;
+        let signer = self.signer.get_pair()?;
         let chain_id = eth.chainid().await?;
         debug!("Eth chain id = {}", chain_id);
         loop {
