@@ -190,37 +190,6 @@ impl TonClient {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ton_client_rejects_invalid_api_key_header() {
-        for api_key in ["bad\nkey", "bad\rkey", "bad\0key"] {
-            let err = TonClient::new(
-                Url::parse("https://ton.example/").expect("valid test URL"),
-                Some(api_key.to_string()),
-            )
-            .err()
-            .expect("invalid API key header must fail");
-
-            assert!(!err.to_string().is_empty());
-        }
-    }
-
-    #[test]
-    fn ton_client_rejects_base_url_that_cannot_join_api_path() {
-        let err = TonClient::new(
-            Url::parse("mailto:ton@example.com").expect("valid opaque URL"),
-            None,
-        )
-        .err()
-        .expect("opaque base URL must fail");
-
-        assert!(!err.to_string().is_empty());
-    }
-}
-
 pub struct SignedTonClient {
     client: TonClient,
     wallet: TonWallet,
@@ -281,5 +250,36 @@ impl SignedTonClient {
         .to_vec();
         let res = self.client.send_boc_return_hash(msg).await?;
         Ok(res.hash.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ton_client_rejects_invalid_api_key_header() {
+        for api_key in ["bad\nkey", "bad\rkey", "bad\0key"] {
+            let err = TonClient::new(
+                Url::parse("https://ton.example/").expect("valid test URL"),
+                Some(api_key.to_string()),
+            )
+            .err()
+            .expect("invalid API key header must fail");
+
+            assert!(!err.to_string().is_empty());
+        }
+    }
+
+    #[test]
+    fn ton_client_rejects_base_url_that_cannot_join_api_path() {
+        let err = TonClient::new(
+            Url::parse("mailto:ton@example.com").expect("valid opaque URL"),
+            None,
+        )
+        .err()
+        .expect("opaque base URL must fail");
+
+        assert!(!err.to_string().is_empty());
     }
 }

@@ -185,7 +185,8 @@ impl SubstrateMessagesRelay {
                     }),
                 );
                 info!("Submit commitment: {}", commitment.nonce());
-                self.sub
+                let status = self
+                    .sub
                     .submit_inbound_commitment(
                         self.signer.clone(),
                         self.evm_network_id,
@@ -193,7 +194,11 @@ impl SubstrateMessagesRelay {
                         commitment,
                     )
                     .await?;
-                sub_nonce += 1;
+                if status.is_processed() {
+                    sub_nonce += 1;
+                } else {
+                    break;
+                }
             }
         }
 
@@ -252,7 +257,8 @@ impl SubstrateMessagesRelay {
                     }),
                 );
                 info!("Submitting status report: {:?}", commitment.nonce());
-                self.sub
+                let status = self
+                    .sub
                     .submit_inbound_commitment(
                         self.signer.clone(),
                         self.evm_network_id,
@@ -260,7 +266,11 @@ impl SubstrateMessagesRelay {
                         commitment,
                     )
                     .await?;
-                sub_reported_nonce += 1;
+                if status.is_processed() {
+                    sub_reported_nonce += 1;
+                } else {
+                    break;
+                }
             }
         }
 

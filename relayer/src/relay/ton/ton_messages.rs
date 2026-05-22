@@ -32,7 +32,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     prelude::*,
-    substrate::{MaxU32, UnboundedGenericCommitment},
+    substrate::{InboundCommitmentSubmissionStatus, MaxU32, UnboundedGenericCommitment},
     ton::{types::StackEntry, TonClient},
 };
 use bridge_types::ton::Commitment;
@@ -259,9 +259,13 @@ impl Relay {
         Ok(sub_nonce)
     }
 
-    async fn send(&self, commitment: Commitment<MaxU32>) -> AnyResult<()> {
+    async fn send(
+        &self,
+        commitment: Commitment<MaxU32>,
+    ) -> AnyResult<InboundCommitmentSubmissionStatus> {
         let commitment = UnboundedGenericCommitment::TON(commitment);
-        self.sub
+        let status = self
+            .sub
             .submit_inbound_commitment(
                 self.signer.clone(),
                 self.ton_network_id,
@@ -269,7 +273,7 @@ impl Relay {
                 commitment,
             )
             .await?;
-        Ok(())
+        Ok(status)
     }
 
     pub async fn run(self) -> AnyResult<()> {
@@ -284,11 +288,16 @@ impl Relay {
                     .messages(sub_nonce.saturating_add(1), ton_nonce)
                     .await?;
                 while sub_nonce < ton_nonce {
-                    sub_nonce += 1;
-                    let message = found_messages.remove(&sub_nonce).ok_or(anyhow!(
-                        "Internal error: Message with nonce {sub_nonce} not found"
+                    let next_nonce = sub_nonce.saturating_add(1);
+                    let message = found_messages.remove(&next_nonce).ok_or(anyhow!(
+                        "Internal error: Message with nonce {next_nonce} not found"
                     ))?;
-                    self.send(message).await?;
+                    let status = self.send(message).await?;
+                    if status.is_processed() {
+                        sub_nonce = next_nonce;
+                    } else {
+                        break;
+                    }
                 }
             }
         }

@@ -151,23 +151,41 @@ pub enum SubmissionOutcome {
     TemporarilyBanned,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InboundCommitmentSubmissionStatus {
+    Processed,
+    Pending,
+}
+
+impl InboundCommitmentSubmissionStatus {
+    pub fn is_processed(self) -> bool {
+        matches!(self, Self::Processed)
+    }
+}
+
 fn inbound_commitment_submission_result(
     outcome: SubmissionOutcome,
     commitment_processed: bool,
-) -> AnyResult<()> {
-    match (outcome, commitment_processed) {
-        (SubmissionOutcome::Submitted, _) => Ok(()),
-        (SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned, true) => Ok(()),
-        (SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned, false) => Err(
-            anyhow!("Commitment submission did not reach finalized chain state"),
-        ),
+) -> InboundCommitmentSubmissionStatus {
+    match outcome {
+        SubmissionOutcome::Submitted => InboundCommitmentSubmissionStatus::Processed,
+        SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
+            if !commitment_processed {
+                debug!("Commitment submission is pending finalization; retrying on next tick");
+            }
+            if commitment_processed {
+                InboundCommitmentSubmissionStatus::Processed
+            } else {
+                InboundCommitmentSubmissionStatus::Pending
+            }
+        }
     }
 }
 
 async fn resolve_inbound_commitment_submission<F, Fut>(
     outcome: SubmissionOutcome,
     commitment_processed: F,
-) -> AnyResult<()>
+) -> InboundCommitmentSubmissionStatus
 where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = AnyResult<bool>>,
@@ -175,7 +193,16 @@ where
     match outcome {
         SubmissionOutcome::Submitted => inbound_commitment_submission_result(outcome, false),
         SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
-            inbound_commitment_submission_result(outcome, commitment_processed().await?)
+            let commitment_processed = match commitment_processed().await {
+                Ok(commitment_processed) => commitment_processed,
+                Err(err) => {
+                    warn!(
+                        "Failed to check finalized commitment state after {outcome:?}; retrying on next tick: {err:?}"
+                    );
+                    false
+                }
+            };
+            inbound_commitment_submission_result(outcome, commitment_processed)
         }
     }
 }
@@ -184,14 +211,14 @@ fn approval_submission_result(
     outcome: SubmissionOutcome,
     approval_still_needed: bool,
 ) -> AnyResult<()> {
-    match (outcome, approval_still_needed) {
-        (SubmissionOutcome::Submitted, _) => Ok(()),
-        (SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned, true) => Err(
-            anyhow!(
-                "Approval submission did not reach finalized chain state and approval is still required"
-            ),
-        ),
-        (SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned, false) => Ok(()),
+    match outcome {
+        SubmissionOutcome::Submitted => Ok(()),
+        SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
+            if approval_still_needed {
+                debug!("Approval submission is pending finalization; retrying on next tick");
+            }
+            Ok(())
+        }
     }
 }
 
@@ -206,7 +233,16 @@ where
     match outcome {
         SubmissionOutcome::Submitted => approval_submission_result(outcome, false),
         SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
-            approval_submission_result(outcome, approval_still_needed().await?)
+            let approval_still_needed = match approval_still_needed().await {
+                Ok(approval_still_needed) => approval_still_needed,
+                Err(err) => {
+                    warn!(
+                        "Failed to check finalized approval state after {outcome:?}; retrying on next tick: {err:?}"
+                    );
+                    true
+                }
+            };
+            approval_submission_result(outcome, approval_still_needed)
         }
     }
 }
@@ -691,7 +727,7 @@ impl UnsignedClient<MainnetConfig> {
         sender: GenericNetworkId,
         receiver: GenericNetworkId,
         commitment: UnboundedGenericCommitment,
-    ) -> AnyResult<()> {
+    ) -> AnyResult<InboundCommitmentSubmissionStatus> {
         info!("Submit commitment {commitment:?}");
         let message =
             sp_runtime::traits::Keccak256::hash_of(&(sender, receiver, commitment.hash()));
@@ -734,7 +770,7 @@ impl UnsignedClient<MainnetConfig> {
                     warn!("Commitment submission is temporarily banned; retrying later")
                 }
             }
-            resolve_inbound_commitment_submission(success, || async {
+            let status = resolve_inbound_commitment_submission(success, || async {
                 let finalized_head = self.finalized_head().await?;
                 debug!(
                     "Checking finalized commitment state after pool outcome: sender={sender:?}, message={message:?}, commitment_nonce={}, commitment_hash={:?}, finalized_head={finalized_head:?}, outcome={success:?}",
@@ -744,15 +780,16 @@ impl UnsignedClient<MainnetConfig> {
                 self.inbound_commitment_processed_at(&sender, &commitment, finalized_head.into())
                     .await
             })
-            .await?;
+            .await;
+            Ok(status)
         } else {
             debug!(
                 "Commitment is not ready to send: sender={sender:?}, message={message:?}, commitment_nonce={}, commitment_hash={:?}",
                 commitment.nonce(),
                 commitment.hash(),
             );
+            Ok(InboundCommitmentSubmissionStatus::Pending)
         }
-        Ok(())
     }
 
     pub async fn approve_message(
@@ -1156,14 +1193,14 @@ mod tests {
     }
 
     #[test]
-    fn approval_submission_errors_when_pool_outcome_still_needs_approval() {
+    fn approval_submission_succeeds_when_pool_outcome_still_needs_approval() {
         for outcome in [
             SubmissionOutcome::AlreadyInPool,
             SubmissionOutcome::TemporarilyBanned,
         ] {
             assert!(
-                approval_submission_result(outcome, true).is_err(),
-                "expected {outcome:?} to retry when approval is still needed"
+                approval_submission_result(outcome, true).is_ok(),
+                "expected {outcome:?} to stay non-fatal when approval is still needed"
             );
         }
     }
@@ -1183,18 +1220,22 @@ mod tests {
 
     #[test]
     fn inbound_commitment_submission_succeeds_after_submitted_outcome() {
-        assert!(inbound_commitment_submission_result(SubmissionOutcome::Submitted, false).is_ok());
+        assert_eq!(
+            inbound_commitment_submission_result(SubmissionOutcome::Submitted, false),
+            InboundCommitmentSubmissionStatus::Processed
+        );
     }
 
     #[test]
-    fn inbound_commitment_submission_errors_when_pool_outcome_not_finalized() {
+    fn inbound_commitment_submission_succeeds_when_pool_outcome_not_finalized() {
         for outcome in [
             SubmissionOutcome::AlreadyInPool,
             SubmissionOutcome::TemporarilyBanned,
         ] {
-            assert!(
-                inbound_commitment_submission_result(outcome, false).is_err(),
-                "expected {outcome:?} to retry when commitment is not finalized"
+            assert_eq!(
+                inbound_commitment_submission_result(outcome, false),
+                InboundCommitmentSubmissionStatus::Pending,
+                "expected {outcome:?} to stay non-fatal when commitment is not finalized"
             );
         }
     }
@@ -1205,8 +1246,9 @@ mod tests {
             SubmissionOutcome::AlreadyInPool,
             SubmissionOutcome::TemporarilyBanned,
         ] {
-            assert!(
-                inbound_commitment_submission_result(outcome, true).is_ok(),
+            assert_eq!(
+                inbound_commitment_submission_result(outcome, true),
+                InboundCommitmentSubmissionStatus::Processed,
                 "expected {outcome:?} to succeed when commitment is finalized"
             );
         }
@@ -1221,7 +1263,7 @@ mod tests {
             let calls = std::cell::Cell::new(0);
             let result = resolve_approval_submission(outcome, || {
                 calls.set(calls.get() + 1);
-                async { Ok(false) }
+                async { Ok(true) }
             })
             .await;
 
@@ -1244,6 +1286,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn approval_submission_tolerates_state_recheck_errors_for_pool_outcomes() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            let result = resolve_approval_submission(outcome, || async {
+                Err::<bool, _>(anyhow!("approval state recheck failed"))
+            })
+            .await;
+
+            assert!(
+                result.is_ok(),
+                "expected {outcome:?} to stay non-fatal when approval state recheck fails"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn inbound_commitment_submission_rechecks_state_for_pool_outcomes() {
         for outcome in [
             SubmissionOutcome::AlreadyInPool,
@@ -1256,24 +1316,42 @@ mod tests {
             })
             .await;
 
-            assert!(result.is_ok());
+            assert_eq!(result, InboundCommitmentSubmissionStatus::Processed);
             assert_eq!(calls.get(), 1, "expected {outcome:?} to re-check state");
         }
     }
 
     #[tokio::test]
-    async fn inbound_commitment_submission_retries_low_priority_until_finalized() {
+    async fn inbound_commitment_submission_tolerates_state_recheck_errors_for_pool_outcomes() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            let result = resolve_inbound_commitment_submission(outcome, || async {
+                Err::<bool, _>(anyhow!("commitment state recheck failed"))
+            })
+            .await;
+
+            assert_eq!(
+                result,
+                InboundCommitmentSubmissionStatus::Pending,
+                "expected {outcome:?} to stay non-fatal when commitment state recheck fails"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn inbound_commitment_submission_tolerates_low_priority_before_finalization() {
         let outcome = Client::transaction_pool_submission_outcome(&subxt_pool_error(
             1014,
             "The transaction has too low priority to replace another transaction already in the pool.",
         ))
         .expect("low-priority pool code should classify");
 
-        assert!(
-            resolve_inbound_commitment_submission(outcome, || async { Ok(false) })
-                .await
-                .is_err(),
-            "low-priority pool outcome must not advance without finalized commitment state"
+        assert_eq!(
+            resolve_inbound_commitment_submission(outcome, || async { Ok(false) }).await,
+            InboundCommitmentSubmissionStatus::Pending,
+            "low-priority pool outcome must stay non-fatal before finalized commitment state"
         );
     }
 
