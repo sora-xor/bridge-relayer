@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "bridge-relayer"
-version = "0.1.0"
+version = "2.1.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7981,106 +7981,6 @@ version = "0.1.0"
 source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
 
 [[patch.unused]]
-name = "beefy-gadget"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "beefy-gadget-rpc"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "mmr-rpc"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "pallet-scheduler"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sc-chain-spec"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sc-client-api"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sc-consensus"
-version = "0.10.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sc-executor"
-version = "0.10.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sc-network"
-version = "0.10.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sc-rpc"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sc-rpc-api"
-version = "0.10.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sc-telemetry"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sp-block-builder"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sp-blockchain"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sp-consensus"
-version = "0.10.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sp-finality-grandpa"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sp-maybe-compressed-blob"
-version = "4.1.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sp-offchain"
-version = "4.0.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "sp-rpc"
-version = "6.0.0"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "substrate-prometheus-endpoint"
-version = "0.10.0-dev"
-source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
 name = "orml-tokens"
 version = "0.4.1-dev"
 source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v0.9.38#241d5cdc98cca53b8cf990853943c9ae1193a70e"
@@ -8194,3 +8094,103 @@ source = "git+https://github.com/sora-xor//sora2-network.git?tag=3.4.0#47a7f6d7d
 name = "assets-runtime-api"
 version = "0.1.0"
 source = "git+https://github.com/sora-xor//sora2-network.git?tag=3.4.0#47a7f6d7dbe663d31d686d961786cfc9d239bf85"
+
+[[patch.unused]]
+name = "beefy-gadget"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "beefy-gadget-rpc"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "mmr-rpc"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "pallet-scheduler"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sc-chain-spec"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sc-client-api"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sc-consensus"
+version = "0.10.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sc-executor"
+version = "0.10.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sc-network"
+version = "0.10.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sc-rpc"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sc-rpc-api"
+version = "0.10.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sc-telemetry"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sp-block-builder"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sp-blockchain"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sp-consensus"
+version = "0.10.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sp-finality-grandpa"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sp-maybe-compressed-blob"
+version = "4.1.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sp-offchain"
+version = "4.0.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "sp-rpc"
+version = "6.0.0"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
+
+[[patch.unused]]
+name = "substrate-prometheus-endpoint"
+version = "0.10.0-dev"
+source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"

@@ -151,6 +151,66 @@ pub enum SubmissionOutcome {
     TemporarilyBanned,
 }
 
+fn inbound_commitment_submission_result(
+    outcome: SubmissionOutcome,
+    commitment_processed: bool,
+) -> AnyResult<()> {
+    match (outcome, commitment_processed) {
+        (SubmissionOutcome::Submitted, _) => Ok(()),
+        (SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned, true) => Ok(()),
+        (SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned, false) => Err(
+            anyhow!("Commitment submission did not reach finalized chain state"),
+        ),
+    }
+}
+
+async fn resolve_inbound_commitment_submission<F, Fut>(
+    outcome: SubmissionOutcome,
+    commitment_processed: F,
+) -> AnyResult<()>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = AnyResult<bool>>,
+{
+    match outcome {
+        SubmissionOutcome::Submitted => inbound_commitment_submission_result(outcome, false),
+        SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
+            inbound_commitment_submission_result(outcome, commitment_processed().await?)
+        }
+    }
+}
+
+fn approval_submission_result(
+    outcome: SubmissionOutcome,
+    approval_still_needed: bool,
+) -> AnyResult<()> {
+    match (outcome, approval_still_needed) {
+        (SubmissionOutcome::Submitted, _) => Ok(()),
+        (SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned, true) => Err(
+            anyhow!(
+                "Approval submission did not reach finalized chain state and approval is still required"
+            ),
+        ),
+        (SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned, false) => Ok(()),
+    }
+}
+
+async fn resolve_approval_submission<F, Fut>(
+    outcome: SubmissionOutcome,
+    approval_still_needed: F,
+) -> AnyResult<()>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = AnyResult<bool>>,
+{
+    match outcome {
+        SubmissionOutcome::Submitted => approval_submission_result(outcome, false),
+        SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
+            approval_submission_result(outcome, approval_still_needed().await?)
+        }
+    }
+}
+
 impl<T: ConfigExt> UnsignedClient<T> {
     const POOL_TEMPORARILY_BANNED: i32 = 1012;
     const POOL_ALREADY_IMPORTED: i32 = 1013;
@@ -479,20 +539,13 @@ impl<T: ConfigExt> UnsignedClient<T> {
                 e
             })
             .context("sign and submit then watch")?
-            .wait_for_in_block()
+            .wait_for_finalized_success()
             .await
             .map_err(|e| {
-                debug!("wait for in block error: {:?}", e);
+                debug!("wait for finalized success error: {:?}", e);
                 e
             })
-            .context("wait for in block")?
-            .wait_for_success()
-            .await
-            .map_err(|e| {
-                debug!("wait for success error: {:?}", e);
-                e
-            })
-            .context("wait for success")?;
+            .context("wait for finalized success")?;
         log_extrinsic_events::<T>(res);
         Ok(())
     }
@@ -642,10 +695,22 @@ impl UnsignedClient<MainnetConfig> {
         info!("Submit commitment {commitment:?}");
         let message =
             sp_runtime::traits::Keccak256::hash_of(&(sender, receiver, commitment.hash()));
+        debug!(
+            "Inbound commitment context: sender={sender:?}, receiver={receiver:?}, nonce={}, hash={:?}, approval_message={message:?}, signer={:?}",
+            commitment.nonce(),
+            commitment.hash(),
+            signer.public(),
+        );
         self.approve_message(signer, sender, message).await?;
         if self.should_send_commitment(&sender, message).await? {
             info!("Sending commitment");
             let approvals = self.bridge_approvals(&sender, message).await?;
+            debug!(
+                "Building inbound commitment proof: sender={sender:?}, message={message:?}, approval_count={}, commitment_nonce={}, commitment_hash={:?}",
+                approvals.len(),
+                commitment.nonce(),
+                commitment.hash(),
+            );
             let proof = VerifierMultiProof::EVMMultisig(
                 runtime::runtime_types::multisig_verifier::MultiEVMProof {
                     proof: approvals.try_into().unwrap(),
@@ -653,9 +718,11 @@ impl UnsignedClient<MainnetConfig> {
             );
             let success = self
                 .submit_concurrent_unsigned_extrinsic(
-                    &runtime::tx()
-                        .bridge_inbound_channel()
-                        .submit(sender, commitment, proof),
+                    &runtime::tx().bridge_inbound_channel().submit(
+                        sender,
+                        commitment.clone(),
+                        proof,
+                    ),
                 )
                 .await?;
             match success {
@@ -664,9 +731,26 @@ impl UnsignedClient<MainnetConfig> {
                     info!("Commitment will be submitted by another relayer")
                 }
                 SubmissionOutcome::TemporarilyBanned => {
-                    warn!("Commitment submission is temporarily banned; retrying after state check")
+                    warn!("Commitment submission is temporarily banned; retrying later")
                 }
             }
+            resolve_inbound_commitment_submission(success, || async {
+                let finalized_head = self.finalized_head().await?;
+                debug!(
+                    "Checking finalized commitment state after pool outcome: sender={sender:?}, message={message:?}, commitment_nonce={}, commitment_hash={:?}, finalized_head={finalized_head:?}, outcome={success:?}",
+                    commitment.nonce(),
+                    commitment.hash(),
+                );
+                self.inbound_commitment_processed_at(&sender, &commitment, finalized_head.into())
+                    .await
+            })
+            .await?;
+        } else {
+            debug!(
+                "Commitment is not ready to send: sender={sender:?}, message={message:?}, commitment_nonce={}, commitment_hash={:?}",
+                commitment.nonce(),
+                commitment.hash(),
+            );
         }
         Ok(())
     }
@@ -677,8 +761,12 @@ impl UnsignedClient<MainnetConfig> {
         sender: GenericNetworkId,
         message: H256,
     ) -> AnyResult<()> {
+        let signer_public = signer.public();
+        debug!(
+            "Checking whether approval is needed: sender={sender:?}, message={message:?}, signer={signer_public:?}",
+        );
         if self
-            .should_send_approval(&sender, signer.public(), message)
+            .should_send_approval(&sender, signer_public, message)
             .await?
         {
             info!("Sending approval");
@@ -693,12 +781,46 @@ impl UnsignedClient<MainnetConfig> {
             match submitted {
                 SubmissionOutcome::Submitted => {}
                 SubmissionOutcome::AlreadyInPool => {
-                    info!("Approval will be submitted by another relayer or is already in the pool")
+                    info!(
+                        "Approval will be submitted by another relayer or is already in the pool"
+                    );
+                    resolve_approval_submission(submitted, || async {
+                        let finalized_head = self.finalized_head().await?;
+                        debug!(
+                            "Re-checking finalized approval state after AlreadyInPool: sender={sender:?}, message={message:?}, signer={signer_public:?}, finalized_head={finalized_head:?}",
+                        );
+                        self.should_send_approval_at(
+                            &sender,
+                            signer_public,
+                            message,
+                            finalized_head.into(),
+                        )
+                        .await
+                    })
+                    .await?;
                 }
                 SubmissionOutcome::TemporarilyBanned => {
-                    warn!("Approval submission is temporarily banned; retrying after state check")
+                    warn!("Approval submission is temporarily banned; checking chain state");
+                    resolve_approval_submission(submitted, || async {
+                        let finalized_head = self.finalized_head().await?;
+                        debug!(
+                            "Re-checking finalized approval state after TemporarilyBanned: sender={sender:?}, message={message:?}, signer={signer_public:?}, finalized_head={finalized_head:?}",
+                        );
+                        self.should_send_approval_at(
+                            &sender,
+                            signer_public,
+                            message,
+                            finalized_head.into(),
+                        )
+                        .await
+                    })
+                    .await?;
                 }
             }
+        } else {
+            debug!(
+                "Approval is not needed: sender={sender:?}, message={message:?}, signer={signer_public:?}",
+            );
         }
         Ok(())
     }
@@ -709,16 +831,37 @@ impl UnsignedClient<MainnetConfig> {
         signer: ecdsa::Public,
         message: H256,
     ) -> AnyResult<bool> {
-        let peers = self.bridge_peers(network_id).await?;
-        let approvals = self.bridge_approvals(network_id, message).await?;
+        self.should_send_approval_at(network_id, signer, message, BlockNumberOrHash::Best)
+            .await
+    }
+
+    async fn should_send_approval_at(
+        &self,
+        network_id: &GenericNetworkId,
+        signer: ecdsa::Public,
+        message: H256,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<bool> {
+        let peers = self.bridge_peers_at(network_id, at).await?;
+        let approvals = self.bridge_approvals_at(network_id, message, at).await?;
+        let threshold = bridge_types::utils::threshold(peers.len() as u32);
         let is_already_approved = approvals
             .iter()
             .filter_map(|approval| approval.recover_prehashed(&message.0))
             .any(|public| signer == public);
-        Ok(
-            (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32)
-                && !is_already_approved,
-        )
+        if !peers.contains(&signer) {
+            warn!(
+                "Local signer is not a configured bridge peer: network={network_id:?}, message={message:?}, signer={signer:?}, peer_count={}, at={at:?}",
+                peers.len(),
+            );
+        }
+        let should_send = (approvals.len() as u32) < threshold && !is_already_approved;
+        debug!(
+            "Approval decision: network={network_id:?}, message={message:?}, signer={signer:?}, peers={}, approvals={}, threshold={threshold}, already_approved={is_already_approved}, should_send={should_send}, at={at:?}",
+            peers.len(),
+            approvals.len(),
+        );
+        Ok(should_send)
     }
 
     pub async fn should_send_commitment(
@@ -728,7 +871,117 @@ impl UnsignedClient<MainnetConfig> {
     ) -> AnyResult<bool> {
         let peers = self.bridge_peers(network_id).await?;
         let approvals = self.bridge_approvals(network_id, message).await?;
-        Ok((approvals.len() as u32) >= bridge_types::utils::threshold(peers.len() as u32))
+        let threshold = bridge_types::utils::threshold(peers.len() as u32);
+        let should_send = (approvals.len() as u32) >= threshold;
+        debug!(
+            "Commitment decision: network={network_id:?}, message={message:?}, peers={}, approvals={}, threshold={threshold}, should_send={should_send}",
+            peers.len(),
+            approvals.len(),
+        );
+        Ok(should_send)
+    }
+
+    async fn inbound_commitment_processed_at(
+        &self,
+        network_id: &GenericNetworkId,
+        commitment: &UnboundedGenericCommitment,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<bool> {
+        match (network_id, commitment) {
+            (
+                GenericNetworkId::EVM(_),
+                bridge_types::GenericCommitment::EVM(bridge_types::evm::Commitment::Inbound(
+                    commitment,
+                )),
+            ) => {
+                self.inbound_channel_nonce_reached(network_id, commitment.nonce, at)
+                    .await
+            }
+            (
+                GenericNetworkId::EVM(_),
+                bridge_types::GenericCommitment::EVM(bridge_types::evm::Commitment::StatusReport(
+                    commitment,
+                )),
+            ) => {
+                let nonce = self
+                    .storage_fetch_or_default(
+                        &runtime::storage()
+                            .bridge_inbound_channel()
+                            .reported_channel_nonces(network_id),
+                        at,
+                    )
+                    .await?;
+                let processed = nonce >= commitment.nonce;
+                debug!(
+                    "Finalized status-report state: network={network_id:?}, at={at:?}, observed_reported_nonce={nonce}, commitment_nonce={}, processed={processed}",
+                    commitment.nonce,
+                );
+                Ok(processed)
+            }
+            (
+                GenericNetworkId::EVM(chain_id),
+                bridge_types::GenericCommitment::EVM(bridge_types::evm::Commitment::BaseFeeUpdate(
+                    update,
+                )),
+            ) => {
+                let base_fee = self
+                    .storage_fetch(
+                        &runtime::storage().evm_fungible_app().base_fees(*chain_id),
+                        at,
+                    )
+                    .await?;
+                let observed_evm_block =
+                    base_fee.as_ref().map(|base_fee| base_fee.evm_block_number);
+                let processed = observed_evm_block
+                    .map(|evm_block| evm_block >= update.evm_block_number)
+                    .unwrap_or(false);
+                debug!(
+                    "Finalized base-fee state: network={network_id:?}, chain_id={chain_id:?}, at={at:?}, observed_evm_block={observed_evm_block:?}, target_evm_block={}, processed={processed}",
+                    update.evm_block_number,
+                );
+                Ok(processed)
+            }
+            (
+                GenericNetworkId::TON(_),
+                bridge_types::GenericCommitment::TON(bridge_types::ton::Commitment::Inbound(
+                    commitment,
+                )),
+            ) => {
+                self.inbound_channel_nonce_reached(network_id, commitment.nonce, at)
+                    .await
+            }
+            (GenericNetworkId::Sub(_), bridge_types::GenericCommitment::Sub(commitment)) => {
+                self.inbound_channel_nonce_reached(network_id, commitment.nonce, at)
+                    .await
+            }
+            _ => {
+                warn!(
+                    "Commitment/network mismatch while checking finalized state: network={network_id:?}, commitment={commitment:?}, at={at:?}",
+                );
+                Ok(false)
+            }
+        }
+    }
+
+    async fn inbound_channel_nonce_reached(
+        &self,
+        network_id: &GenericNetworkId,
+        commitment_nonce: u64,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<bool> {
+        let nonce = self
+            .storage_fetch_or_default(
+                &runtime::storage()
+                    .bridge_inbound_channel()
+                    .channel_nonces(network_id),
+                at,
+            )
+            .await?;
+        let processed = nonce >= commitment_nonce;
+        debug!(
+            "Finalized inbound nonce state: network={network_id:?}, at={at:?}, observed_nonce={nonce}, commitment_nonce={commitment_nonce}, processed={processed}",
+        );
+        Ok(processed)
     }
 
     pub async fn bridge_approvals(
@@ -736,25 +989,55 @@ impl UnsignedClient<MainnetConfig> {
         network_id: &GenericNetworkId,
         message: H256,
     ) -> AnyResult<Vec<ecdsa::Signature>> {
-        let peers = self.bridge_peers(network_id).await?;
+        self.bridge_approvals_at(network_id, message, BlockNumberOrHash::Best)
+            .await
+    }
+
+    async fn bridge_approvals_at(
+        &self,
+        network_id: &GenericNetworkId,
+        message: H256,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<Vec<ecdsa::Signature>> {
+        let peers = self.bridge_peers_at(network_id, at).await?;
         let approvals = self
             .storage_fetch_or_default(
                 &runtime::storage()
                     .bridge_data_signer()
                     .approvals(network_id, message),
-                (),
+                at,
             )
             .await?;
+        debug!(
+            "Fetched bridge approvals: network={network_id:?}, message={message:?}, raw_approvals={}, peer_count={}, at={at:?}",
+            approvals.len(),
+            peers.len(),
+        );
         let mut acceptable_approvals = vec![];
-        for approval in approvals {
-            let public = approval
-                .1
-                .recover_prehashed(&message.0)
-                .ok_or(anyhow!("Wrong signature in data signer pallet"))?;
+        for (idx, approval) in approvals.into_iter().enumerate() {
+            let public = approval.1.recover_prehashed(&message.0).ok_or_else(|| {
+                error!(
+                    "Could not recover approval signer: network={network_id:?}, message={message:?}, approval_index={idx}, at={at:?}",
+                );
+                anyhow!("Wrong signature in data signer pallet")
+            })?;
             if peers.contains(&public) {
+                debug!(
+                    "Accepted bridge approval: network={network_id:?}, message={message:?}, approval_index={idx}, peer={public:?}, at={at:?}",
+                );
                 acceptable_approvals.push(approval.1);
+            } else {
+                warn!(
+                    "Ignoring approval from non-peer signer: network={network_id:?}, message={message:?}, approval_index={idx}, recovered_signer={public:?}, peer_count={}, at={at:?}",
+                    peers.len(),
+                );
             }
         }
+        debug!(
+            "Filtered bridge approvals: network={network_id:?}, message={message:?}, acceptable_approvals={}, peer_count={}, at={at:?}",
+            acceptable_approvals.len(),
+            peers.len(),
+        );
         Ok(acceptable_approvals)
     }
 
@@ -762,15 +1045,32 @@ impl UnsignedClient<MainnetConfig> {
         &self,
         network_id: &GenericNetworkId,
     ) -> AnyResult<BTreeSet<ecdsa::Public>> {
-        let peers = self
+        self.bridge_peers_at(network_id, BlockNumberOrHash::Best)
+            .await
+    }
+
+    async fn bridge_peers_at(
+        &self,
+        network_id: &GenericNetworkId,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<BTreeSet<ecdsa::Public>> {
+        let peers: BTreeSet<ecdsa::Public> = self
             .storage_fetch(
                 &runtime::storage().multisig_verifier().peer_keys(network_id),
-                (),
+                at,
             )
             .await?
             .unwrap_or_default()
             .into_iter()
             .collect();
+        if peers.is_empty() {
+            warn!("No bridge peers configured: network={network_id:?}, at={at:?}");
+        } else {
+            debug!(
+                "Fetched bridge peers: network={network_id:?}, peer_count={}, peers={peers:?}, at={at:?}",
+                peers.len(),
+            );
+        }
         Ok(peers)
     }
 }
@@ -848,6 +1148,133 @@ mod tests {
             proof: Bytes(vec![4, 5, 6]),
         })
         .expect("MMR proof DTO should serialize")
+    }
+
+    #[test]
+    fn approval_submission_succeeds_after_submitted_outcome() {
+        assert!(approval_submission_result(SubmissionOutcome::Submitted, true).is_ok());
+    }
+
+    #[test]
+    fn approval_submission_errors_when_pool_outcome_still_needs_approval() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            assert!(
+                approval_submission_result(outcome, true).is_err(),
+                "expected {outcome:?} to retry when approval is still needed"
+            );
+        }
+    }
+
+    #[test]
+    fn approval_submission_succeeds_when_pool_outcome_no_longer_needs_approval() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            assert!(
+                approval_submission_result(outcome, false).is_ok(),
+                "expected {outcome:?} to succeed when approval is no longer needed"
+            );
+        }
+    }
+
+    #[test]
+    fn inbound_commitment_submission_succeeds_after_submitted_outcome() {
+        assert!(inbound_commitment_submission_result(SubmissionOutcome::Submitted, false).is_ok());
+    }
+
+    #[test]
+    fn inbound_commitment_submission_errors_when_pool_outcome_not_finalized() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            assert!(
+                inbound_commitment_submission_result(outcome, false).is_err(),
+                "expected {outcome:?} to retry when commitment is not finalized"
+            );
+        }
+    }
+
+    #[test]
+    fn inbound_commitment_submission_succeeds_when_pool_outcome_is_finalized() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            assert!(
+                inbound_commitment_submission_result(outcome, true).is_ok(),
+                "expected {outcome:?} to succeed when commitment is finalized"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn approval_submission_rechecks_state_for_pool_outcomes() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            let calls = std::cell::Cell::new(0);
+            let result = resolve_approval_submission(outcome, || {
+                calls.set(calls.get() + 1);
+                async { Ok(false) }
+            })
+            .await;
+
+            assert!(result.is_ok());
+            assert_eq!(calls.get(), 1, "expected {outcome:?} to re-check state");
+        }
+    }
+
+    #[tokio::test]
+    async fn approval_submission_does_not_recheck_state_for_submitted_outcome() {
+        let calls = std::cell::Cell::new(0);
+        let result = resolve_approval_submission(SubmissionOutcome::Submitted, || {
+            calls.set(calls.get() + 1);
+            async { Ok(true) }
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(calls.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn inbound_commitment_submission_rechecks_state_for_pool_outcomes() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            let calls = std::cell::Cell::new(0);
+            let result = resolve_inbound_commitment_submission(outcome, || {
+                calls.set(calls.get() + 1);
+                async { Ok(true) }
+            })
+            .await;
+
+            assert!(result.is_ok());
+            assert_eq!(calls.get(), 1, "expected {outcome:?} to re-check state");
+        }
+    }
+
+    #[tokio::test]
+    async fn inbound_commitment_submission_retries_low_priority_until_finalized() {
+        let outcome = Client::transaction_pool_submission_outcome(&subxt_pool_error(
+            1014,
+            "The transaction has too low priority to replace another transaction already in the pool.",
+        ))
+        .expect("low-priority pool code should classify");
+
+        assert!(
+            resolve_inbound_commitment_submission(outcome, || async { Ok(false) })
+                .await
+                .is_err(),
+            "low-priority pool outcome must not advance without finalized commitment state"
+        );
     }
 
     #[test]

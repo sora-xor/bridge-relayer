@@ -142,20 +142,47 @@ where
         Ok(nonce)
     }
 
-    async fn approvals(&self, message: H256) -> AnyResult<Vec<ecdsa::Signature>> {
+    async fn approvals_with_signers(
+        &self,
+        message: H256,
+    ) -> AnyResult<Vec<(ecdsa::Public, ecdsa::Signature)>> {
         let peers = self.receiver_peers().await?;
         let approvals = self
             .sender
             .storage_fetch_or_default(&S::approvals(self.receiver_network_id.into(), message), ())
             .await?;
         let mut acceptable_approvals = vec![];
-        for approval in approvals {
+        debug!(
+            "Fetched multisig approvals: sender_network={:?}, receiver_network={:?}, digest_hash={message:?}, raw_approvals={}, receiver_peer_count={}",
+            self.sender_network_id,
+            self.receiver_network_id,
+            approvals.len(),
+            peers.len(),
+        );
+        for (idx, approval) in approvals.into_iter().enumerate() {
             let public = approval
                 .1
                 .recover_prehashed(&message.0)
-                .ok_or(anyhow!("Wrong signature in data signer pallet"))?;
+                .ok_or_else(|| {
+                    error!(
+                        "Could not recover multisig approval signer: sender_network={:?}, receiver_network={:?}, digest_hash={message:?}, approval_index={idx}",
+                        self.sender_network_id, self.receiver_network_id,
+                    );
+                    anyhow!("Wrong signature in data signer pallet")
+                })?;
             if peers.contains(&public) {
-                acceptable_approvals.push(approval.1);
+                debug!(
+                    "Accepted multisig approval: sender_network={:?}, receiver_network={:?}, digest_hash={message:?}, approval_index={idx}, peer={public:?}",
+                    self.sender_network_id, self.receiver_network_id,
+                );
+                acceptable_approvals.push((public, approval.1));
+            } else {
+                warn!(
+                    "Ignoring multisig approval from non-peer signer: sender_network={:?}, receiver_network={:?}, digest_hash={message:?}, approval_index={idx}, recovered_signer={public:?}, receiver_peer_count={}",
+                    self.sender_network_id,
+                    self.receiver_network_id,
+                    peers.len(),
+                );
             }
         }
         Ok(acceptable_approvals)
@@ -182,13 +209,24 @@ where
     }
 
     pub async fn run(self) -> AnyResult<()> {
+        let signer_public = self.signer.public();
         loop {
-            let public = self.signer.public();
             let peers = self.sender_peers().await?;
-            if !peers.contains(&public) {
-                info!("Peer is not in trusted list, waiting...");
+            if !peers.contains(&signer_public) {
+                info!(
+                    "Peer is not in trusted list, waiting: sender_network={:?}, receiver_network={:?}, signer={signer_public:?}, sender_peer_count={}, sender_peers={peers:?}",
+                    self.sender_network_id,
+                    self.receiver_network_id,
+                    peers.len(),
+                );
                 tokio::time::sleep(S::average_block_time()).await;
             } else {
+                debug!(
+                    "Peer is trusted for multisig relay: sender_network={:?}, receiver_network={:?}, signer={signer_public:?}, sender_peer_count={}",
+                    self.sender_network_id,
+                    self.receiver_network_id,
+                    peers.len(),
+                );
                 break;
             }
         }
@@ -197,11 +235,15 @@ where
             interval.tick().await;
             let inbound_nonce = self.inbound_channel_nonce().await?;
             let outbound_nonce = self.outbound_channel_nonce().await?;
+            debug!(
+                "Multisig relay nonce state: sender_network={:?}, receiver_network={:?}, inbound_nonce={inbound_nonce}, outbound_nonce={outbound_nonce}",
+                self.sender_network_id, self.receiver_network_id,
+            );
             if inbound_nonce >= outbound_nonce {
                 if inbound_nonce > outbound_nonce {
                     error!(
-                        "Inbound channel nonce is higher than outbound channel nonce: {} > {}",
-                        inbound_nonce, outbound_nonce
+                        "Inbound channel nonce is higher than outbound channel nonce: sender_network={:?}, receiver_network={:?}, inbound_nonce={inbound_nonce}, outbound_nonce={outbound_nonce}",
+                        self.sender_network_id, self.receiver_network_id,
                     );
                 }
                 continue;
@@ -216,6 +258,7 @@ where
                     )
                     .await?;
                 let commitment_hash = offchain_data.commitment.hash();
+                let commitment_nonce = offchain_data.commitment.nonce();
                 let digest: AuxiliaryDigest = load_digest(
                     &self.sender,
                     self.receiver_network_id.into(),
@@ -224,16 +267,40 @@ where
                 )
                 .await?;
                 let digest_hash = Keccak256::hash_of(&digest);
-                trace!("Digest hash: {}", digest_hash);
+                debug!(
+                    "Loaded multisig commitment: sender_network={:?}, receiver_network={:?}, nonce={commitment_nonce}, block_number={:?}, commitment_hash={commitment_hash:?}, digest_hash={digest_hash:?}",
+                    self.sender_network_id,
+                    self.receiver_network_id,
+                    offchain_data.block_number,
+                );
                 let peers = self.receiver_peers().await?;
-                let approvals = self.approvals(digest_hash).await?;
-                let is_already_approved = approvals
+                if !peers.contains(&signer_public) {
+                    warn!(
+                        "Local signer is not a receiver multisig peer: sender_network={:?}, receiver_network={:?}, nonce={commitment_nonce}, digest_hash={digest_hash:?}, signer={signer_public:?}, receiver_peer_count={}, receiver_peers={peers:?}",
+                        self.sender_network_id,
+                        self.receiver_network_id,
+                        peers.len(),
+                    );
+                }
+                let approvals_with_signers = self.approvals_with_signers(digest_hash).await?;
+                let approved_peers = approvals_with_signers
                     .iter()
-                    .filter_map(|approval| approval.recover_prehashed(&digest_hash.0))
-                    .any(|public| self.signer.public() == public);
-                if (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32)
-                    && !is_already_approved
-                {
+                    .map(|(public, _)| *public)
+                    .collect::<BTreeSet<_>>();
+                let missing_peers = peers
+                    .difference(&approved_peers)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let is_already_approved = approved_peers.contains(&signer_public);
+                let threshold = bridge_types::utils::threshold(peers.len() as u32);
+                debug!(
+                    "Multisig approval state: sender_network={:?}, receiver_network={:?}, nonce={commitment_nonce}, digest_hash={digest_hash:?}, signer={signer_public:?}, approvals={}, threshold={threshold}, receiver_peer_count={}, already_approved={is_already_approved}, approved_peers={approved_peers:?}, missing_peers={missing_peers:?}",
+                    self.sender_network_id,
+                    self.receiver_network_id,
+                    approvals_with_signers.len(),
+                    peers.len(),
+                );
+                if (approvals_with_signers.len() as u32) < threshold && !is_already_approved {
                     let signature = self.signer.sign_prehashed(&digest_hash.0);
                     let call = S::submit_signature(
                         self.receiver_network_id.into(),
@@ -248,30 +315,61 @@ where
                         SubmissionOutcome::Submitted => {}
                         SubmissionOutcome::AlreadyInPool => {
                             info!(
-                                "Approval will be submitted by another relayer or is already in the pool"
+                                "Approval will be submitted by another relayer or is already in the pool: sender_network={:?}, receiver_network={:?}, nonce={commitment_nonce}, digest_hash={digest_hash:?}, signer={signer_public:?}, approvals={}, threshold={threshold}, missing_peers={missing_peers:?}",
+                                self.sender_network_id,
+                                self.receiver_network_id,
+                                approvals_with_signers.len(),
                             );
                         }
                         SubmissionOutcome::TemporarilyBanned => {
                             warn!(
-                                "Approval submission is temporarily banned; retrying after state check"
+                                "Approval submission is temporarily banned; retrying after state check: sender_network={:?}, receiver_network={:?}, nonce={commitment_nonce}, digest_hash={digest_hash:?}, signer={signer_public:?}, approvals={}, threshold={threshold}, missing_peers={missing_peers:?}",
+                                self.sender_network_id,
+                                self.receiver_network_id,
+                                approvals_with_signers.len(),
                             );
                         }
                     }
                 }
-                let approvals = self.approvals(digest_hash).await?;
-                if (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32) {
+                let approvals_with_signers = self.approvals_with_signers(digest_hash).await?;
+                let approved_peers = approvals_with_signers
+                    .iter()
+                    .map(|(public, _)| *public)
+                    .collect::<BTreeSet<_>>();
+                let missing_peers = peers
+                    .difference(&approved_peers)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let approvals = approvals_with_signers
+                    .into_iter()
+                    .map(|(_, signature)| signature)
+                    .collect::<Vec<_>>();
+                if (approvals.len() as u32) < threshold {
                     info!(
-                    "Still not enough signatures, probably another relayer will submit commitment"
-                );
+                        "Still not enough signatures, probably another relayer will submit commitment: sender_network={:?}, receiver_network={:?}, nonce={commitment_nonce}, digest_hash={digest_hash:?}, approvals={}, threshold={threshold}, missing_peers={missing_peers:?}",
+                        self.sender_network_id,
+                        self.receiver_network_id,
+                        approvals.len(),
+                    );
                     continue;
                 }
+                info!(
+                    "Submitting multisig commitment: sender_network={:?}, receiver_network={:?}, nonce={commitment_nonce}, commitment_hash={commitment_hash:?}, digest_hash={digest_hash:?}, approvals={}, threshold={threshold}",
+                    self.sender_network_id,
+                    self.receiver_network_id,
+                    approvals.len(),
+                );
                 let call = R::submit_messages_commitment(
                     self.sender_network_id.into(),
                     offchain_data.commitment,
                     R::multisig_proof(digest, approvals),
                 );
                 if let Err(err) = self.receiver.submit_unsigned_extrinsic(&call).await {
-                    error!("Failed to submit messages, probably another relayer already submitted it: {:?}", err);
+                    error!(
+                        "Failed to submit multisig commitment: sender_network={:?}, receiver_network={:?}, nonce={commitment_nonce}, commitment_hash={commitment_hash:?}, digest_hash={digest_hash:?}, error={err:?}",
+                        self.sender_network_id,
+                        self.receiver_network_id,
+                    );
                 }
             }
         }
