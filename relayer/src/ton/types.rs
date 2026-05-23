@@ -27,6 +27,7 @@ pub struct TransactionId {
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct FullAccountState {
     #[serde_as(as = "NumberOrString<_>")]
     pub balance: i64,
