@@ -55,7 +55,7 @@ impl Command {
         sub.submit_extrinsic(&runtime::tx().eth_bridge().register_bridge(
             self.contract,
             self.peers.clone(),
-            BridgeSignatureVersion::V2,
+            BridgeSignatureVersion::V3,
         ))
         .await?;
         Ok(())

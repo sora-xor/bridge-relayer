@@ -61,6 +61,7 @@ pub enum AssetKind {
 pub enum BridgeSignatureVersion {
     V1,
     V2,
+    V3,
 }
 
 pub type MaxU32 = sp_runtime::traits::ConstU32<{ u32::MAX }>;
