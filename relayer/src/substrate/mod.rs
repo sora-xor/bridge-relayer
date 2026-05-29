@@ -139,6 +139,7 @@ pub struct UnsignedClient<T: ConfigExt> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MmrLeavesProof<BlockHash> {
+    #[serde(alias = "block_hash")]
     block_hash: BlockHash,
     leaves: Bytes,
     proof: Bytes,
@@ -1372,15 +1373,22 @@ mod tests {
     }
 
     #[test]
-    fn mmr_leaves_proof_rejects_snake_case_block_hash() {
+    fn mmr_leaves_proof_accepts_snake_case_block_hash() {
         let mut value = serialized_mmr_proof();
         let object = value
             .as_object_mut()
             .expect("serialized proof should be an object");
         let block_hash = object.remove("blockHash").expect("blockHash should exist");
+        let expected_block_hash: H256 =
+            serde_json::from_value(block_hash.clone()).expect("blockHash should decode as H256");
         object.insert("block_hash".to_string(), block_hash);
 
-        assert!(serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err());
+        assert_eq!(
+            serde_json::from_value::<MmrLeavesProof<H256>>(value)
+                .expect("MMR proof should accept RPC snake_case block_hash")
+                .block_hash,
+            expected_block_hash
+        );
     }
 
     #[test]
