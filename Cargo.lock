@@ -7971,6 +7971,21 @@ dependencies = [
 ]
 
 [[patch.unused]]
+name = "leaf-provider-rpc"
+version = "0.1.0"
+source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
+
+[[patch.unused]]
+name = "leaf-provider-runtime-api"
+version = "0.1.0"
+source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
+
+[[patch.unused]]
+name = "orml-tokens"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v0.9.38#241d5cdc98cca53b8cf990853943c9ae1193a70e"
+
+[[patch.unused]]
 name = "assets-rpc"
 version = "0.1.0"
 source = "git+https://github.com/sora-xor//sora2-network.git?tag=3.4.0#47a7f6d7dbe663d31d686d961786cfc9d239bf85"
@@ -7981,11 +7996,6 @@ version = "0.1.0"
 source = "git+https://github.com/sora-xor//sora2-network.git?tag=3.4.0#47a7f6d7dbe663d31d686d961786cfc9d239bf85"
 
 [[patch.unused]]
-name = "orml-tokens"
-version = "0.4.1-dev"
-source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v0.9.38#241d5cdc98cca53b8cf990853943c9ae1193a70e"
-
-[[patch.unused]]
 name = "beefy-gadget"
 version = "4.0.0-dev"
 source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
@@ -8184,13 +8194,3 @@ source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#
 name = "substrate-prometheus-endpoint"
 version = "0.10.0-dev"
 source = "git+https://github.com/sora-xor/substrate.git?branch=polkadot-v0.9.38#0a644f81b6fb1dfceaf43747f0a2d09dd7f42dfe"
-
-[[patch.unused]]
-name = "leaf-provider-rpc"
-version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
-
-[[patch.unused]]
-name = "leaf-provider-runtime-api"
-version = "0.1.0"
-source = "git+https://github.com/sora-xor//sora2-common.git?branch=ton-bridge#6cce1b4cc1017482df29fa8727e514fde5c8311d"
