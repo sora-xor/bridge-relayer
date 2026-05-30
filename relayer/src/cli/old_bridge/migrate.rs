@@ -72,7 +72,7 @@ impl Command {
                     new_contract_address: self.contract,
                     erc20_native_tokens: addresses,
                     network_id: self.network,
-                    new_signature_version: BridgeSignatureVersion::V2,
+                    new_signature_version: BridgeSignatureVersion::V3,
                 },
             ),
         ))

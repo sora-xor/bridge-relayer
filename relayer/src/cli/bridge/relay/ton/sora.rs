@@ -38,16 +38,15 @@ pub(crate) struct Command {
     sub: SubstrateClient,
     #[clap(flatten)]
     ton: TonClientCli,
-    /// Signer for bridge messages
-    #[clap(long)]
-    signer: String,
+    #[clap(flatten)]
+    signer: BridgeSigner,
 }
 
 impl Command {
     pub(super) async fn run(&self) -> AnyResult<()> {
         let ton = self.ton.get_unsigned_ton()?;
         let sub = self.sub.get_unsigned_substrate().await?;
-        let signer = sp_core::ecdsa::Pair::from_string(&self.signer, None)?;
+        let signer = self.signer.get_pair()?;
         let Some((network_id, _app)) = sub
             .storage_fetch(&runtime::storage().jetton_app().app_info(), ())
             .await?

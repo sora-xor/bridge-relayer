@@ -31,11 +31,9 @@
 use crate::prelude::*;
 use bridge_types::types::LeafExtraData;
 use bridge_types::H256;
-use codec::IoReader;
 use common::{AssetId32, PredefinedAssetId};
 pub use liberland_gen::liberland_runtime;
 pub use parachain_gen::parachain_runtime;
-use sp_core::Bytes;
 use sp_mmr_primitives::Proof;
 pub use substrate_gen::runtime as mainnet_runtime;
 use subxt::constants::ConstantAddress;
@@ -74,16 +72,6 @@ pub struct LeafProof<T: ConfigExt> {
     pub block_hash: BlockHash<T>,
     pub leaf: MmrLeaf<T>,
     pub proof: Proof<MmrHash>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EncodedBeefyCommitment(pub Bytes);
-
-impl EncodedBeefyCommitment {
-    pub fn decode<T: ConfigExt>(&self) -> AnyResult<BeefySignedCommitment<T>> {
-        let mut reader = IoReader(&self.0[..]);
-        Ok(Decode::decode(&mut reader)?)
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -95,3 +95,47 @@ impl TonWallet {
         Ok(message)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wallet_key_rejects_missing_version_separator() {
+        for key in ["", "v4r2", "v4r2-", "v4r2/key"] {
+            assert!(
+                TonWallet::from_key(key).is_err(),
+                "TON wallet key without version separator must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn wallet_key_rejects_empty_or_malformed_mnemonic() {
+        for key in [
+            "v4r2:",
+            "v4r2:not enough words",
+            "V4R2:not\0valid",
+            "v3r2:word word word word word word word word",
+        ] {
+            assert!(
+                TonWallet::from_key(key).is_err(),
+                "TON wallet key with malformed mnemonic must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn wallet_key_rejects_missing_version_even_with_mnemonic_text() {
+        for key in [
+            ":not enough words",
+            " :not enough words",
+            "\n:not enough words",
+        ] {
+            assert!(
+                TonWallet::from_key(key).is_err(),
+                "TON wallet key with missing version must fail"
+            );
+        }
+    }
+}

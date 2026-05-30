@@ -207,7 +207,6 @@ where
                     debug!("Waiting for BEEFY block {:?}", block_number);
                     break;
                 }
-                self.send_commitment(nonce).await?;
                 if let Err(err) = self.send_commitment(nonce).await {
                     return Err(anyhow!("Error sending message commitment: {:?}", err));
                 }

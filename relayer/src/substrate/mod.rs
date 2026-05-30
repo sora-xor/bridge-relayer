@@ -41,9 +41,8 @@ use std::sync::Arc;
 use crate::prelude::*;
 use bridge_types::types::AuxiliaryDigest;
 use bridge_types::GenericNetworkId;
-use common::{AssetName, AssetSymbol, Balance, ContentSource, Description};
-use mmr_rpc::MmrApiClient;
-use sp_core::{ecdsa, H256};
+use jsonrpsee::core::client::ClientT;
+use sp_core::{ecdsa, Bytes, H256};
 use sp_mmr_primitives::{EncodableOpaqueLeaf, Proof};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use std::sync::RwLock;
@@ -137,7 +136,123 @@ pub struct UnsignedClient<T: ConfigExt> {
     client: ClonableClient,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MmrLeavesProof<BlockHash> {
+    #[serde(alias = "block_hash")]
+    block_hash: BlockHash,
+    leaves: Bytes,
+    proof: Bytes,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubmissionOutcome {
+    Submitted,
+    AlreadyInPool,
+    TemporarilyBanned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InboundCommitmentSubmissionStatus {
+    Processed,
+    Pending,
+}
+
+impl InboundCommitmentSubmissionStatus {
+    pub fn is_processed(self) -> bool {
+        matches!(self, Self::Processed)
+    }
+}
+
+fn inbound_commitment_submission_result(
+    outcome: SubmissionOutcome,
+    commitment_processed: bool,
+) -> InboundCommitmentSubmissionStatus {
+    match outcome {
+        SubmissionOutcome::Submitted => InboundCommitmentSubmissionStatus::Processed,
+        SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
+            if !commitment_processed {
+                debug!("Commitment submission is pending finalization; retrying on next tick");
+            }
+            if commitment_processed {
+                InboundCommitmentSubmissionStatus::Processed
+            } else {
+                InboundCommitmentSubmissionStatus::Pending
+            }
+        }
+    }
+}
+
+async fn resolve_inbound_commitment_submission<F, Fut>(
+    outcome: SubmissionOutcome,
+    commitment_processed: F,
+) -> InboundCommitmentSubmissionStatus
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = AnyResult<bool>>,
+{
+    match outcome {
+        SubmissionOutcome::Submitted => inbound_commitment_submission_result(outcome, false),
+        SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
+            let commitment_processed = match commitment_processed().await {
+                Ok(commitment_processed) => commitment_processed,
+                Err(err) => {
+                    warn!(
+                        "Failed to check finalized commitment state after {outcome:?}; retrying on next tick: {err:?}"
+                    );
+                    false
+                }
+            };
+            inbound_commitment_submission_result(outcome, commitment_processed)
+        }
+    }
+}
+
+fn approval_submission_result(
+    outcome: SubmissionOutcome,
+    approval_still_needed: bool,
+) -> AnyResult<()> {
+    match outcome {
+        SubmissionOutcome::Submitted => Ok(()),
+        SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
+            if approval_still_needed {
+                debug!("Approval submission is pending finalization; retrying on next tick");
+            }
+            Ok(())
+        }
+    }
+}
+
+async fn resolve_approval_submission<F, Fut>(
+    outcome: SubmissionOutcome,
+    approval_still_needed: F,
+) -> AnyResult<()>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = AnyResult<bool>>,
+{
+    match outcome {
+        SubmissionOutcome::Submitted => approval_submission_result(outcome, false),
+        SubmissionOutcome::AlreadyInPool | SubmissionOutcome::TemporarilyBanned => {
+            let approval_still_needed = match approval_still_needed().await {
+                Ok(approval_still_needed) => approval_still_needed,
+                Err(err) => {
+                    warn!(
+                        "Failed to check finalized approval state after {outcome:?}; retrying on next tick: {err:?}"
+                    );
+                    true
+                }
+            };
+            approval_submission_result(outcome, approval_still_needed)
+        }
+    }
+}
+
 impl<T: ConfigExt> UnsignedClient<T> {
+    const POOL_TEMPORARILY_BANNED: i32 = 1012;
+    const POOL_ALREADY_IMPORTED: i32 = 1013;
+    const POOL_TOO_LOW_PRIORITY: i32 = 1014;
+
     pub async fn new(url: impl Into<String>) -> AnyResult<Self> {
         let url: Uri = url.into().parse()?;
         let (sender, receiver) =
@@ -154,49 +269,6 @@ impl<T: ConfigExt> UnsignedClient<T> {
 
     pub fn rpc(&self) -> &jsonrpsee::async_client::Client {
         &self.client.0
-    }
-
-    pub fn mmr(&self) -> &impl mmr_rpc::MmrApiClient<BlockHash<T>, BlockNumber<T>, MmrHash> {
-        self.rpc()
-    }
-
-    pub fn beefy(
-        &self,
-    ) -> &impl beefy_gadget_rpc::BeefyApiClient<types::EncodedBeefyCommitment, BlockHash<T>> {
-        self.rpc()
-    }
-
-    pub fn assets(
-        &self,
-    ) -> &impl assets_rpc::AssetsAPIClient<
-        BlockHash<T>,
-        AccountId<T>,
-        AssetId,
-        Balance,
-        Option<assets_runtime_api::BalanceInfo<Balance>>,
-        Option<
-            assets_runtime_api::AssetInfo<
-                AssetId,
-                AssetSymbol,
-                AssetName,
-                u8,
-                ContentSource,
-                Description,
-            >,
-        >,
-        Vec<
-            assets_runtime_api::AssetInfo<
-                AssetId,
-                AssetSymbol,
-                AssetName,
-                u8,
-                ContentSource,
-                Description,
-            >,
-        >,
-        Vec<AssetId>,
-    > {
-        self.rpc()
     }
 
     pub async fn auxiliary_digest(&self, at: Option<BlockHash<T>>) -> AnyResult<AuxiliaryDigest>
@@ -283,8 +355,11 @@ impl<T: ConfigExt> UnsignedClient<T> {
         BlockNumber<T>: Serialize,
     {
         let res = self
-            .mmr()
-            .generate_proof(vec![block_number], Some(at), None)
+            .rpc()
+            .request::<MmrLeavesProof<BlockHash<T>>, _>(
+                "mmr_generateProof",
+                (vec![block_number], Some(at), Option::<BlockHash<T>>::None),
+            )
             .await?;
 
         let enc_opaque_leaf = match Vec::<EncodableOpaqueLeaf>::decode(&mut res.leaves.as_ref()) {
@@ -450,21 +525,31 @@ impl<T: ConfigExt> UnsignedClient<T> {
         SignedClient::<T>::new(self, signer).await
     }
 
-    pub fn is_transaction_imported_or_banned(error: &subxt::Error) -> bool {
+    pub fn transaction_pool_submission_outcome(error: &subxt::Error) -> Option<SubmissionOutcome> {
         match error {
             subxt::Error::Rpc(subxt::error::RpcError::ClientError(error)) => {
                 let Some(error) = error.downcast_ref::<jsonrpsee::core::Error>() else {
-                    return false;
+                    return None;
                 };
                 match error {
                     jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
                         error,
-                    )) => error.code() == 1013 || error.code() == 1014,
-                    _ => false,
+                    )) => match error.code() {
+                        Self::POOL_TEMPORARILY_BANNED => Some(SubmissionOutcome::TemporarilyBanned),
+                        Self::POOL_ALREADY_IMPORTED | Self::POOL_TOO_LOW_PRIORITY => {
+                            Some(SubmissionOutcome::AlreadyInPool)
+                        }
+                        _ => None,
+                    },
+                    _ => None,
                 }
             }
-            _ => false,
+            _ => None,
         }
+    }
+
+    pub fn is_transaction_imported_or_banned(error: &subxt::Error) -> bool {
+        Self::transaction_pool_submission_outcome(error).is_some()
     }
 
     pub async fn submit_unsigned_extrinsic<P: subxt::tx::TxPayload>(
@@ -491,20 +576,13 @@ impl<T: ConfigExt> UnsignedClient<T> {
                 e
             })
             .context("sign and submit then watch")?
-            .wait_for_in_block()
+            .wait_for_finalized_success()
             .await
             .map_err(|e| {
-                debug!("wait for in block error: {:?}", e);
+                debug!("wait for finalized success error: {:?}", e);
                 e
             })
-            .context("wait for in block")?
-            .wait_for_success()
-            .await
-            .map_err(|e| {
-                debug!("wait for success error: {:?}", e);
-                e
-            })
-            .context("wait for success")?;
+            .context("wait for finalized success")?;
         log_extrinsic_events::<T>(res);
         Ok(())
     }
@@ -512,7 +590,7 @@ impl<T: ConfigExt> UnsignedClient<T> {
     pub async fn submit_concurrent_unsigned_extrinsic<P: subxt::tx::TxPayload>(
         &self,
         xt: &P,
-    ) -> AnyResult<bool> {
+    ) -> AnyResult<SubmissionOutcome> {
         let result = self.submit_unsigned_extrinsic(xt).await;
         match result {
             Err(e) => {
@@ -520,13 +598,13 @@ impl<T: ConfigExt> UnsignedClient<T> {
                     error!("unexpected error: {:?}", e);
                     return Err(e);
                 };
-                if Self::is_transaction_imported_or_banned(subxt_error) {
-                    Ok(false)
+                if let Some(outcome) = Self::transaction_pool_submission_outcome(subxt_error) {
+                    Ok(outcome)
                 } else {
                     Err(e)
                 }
             }
-            Ok(()) => Ok(true),
+            Ok(()) => Ok(SubmissionOutcome::Submitted),
         }
     }
 }
@@ -650,14 +728,26 @@ impl UnsignedClient<MainnetConfig> {
         sender: GenericNetworkId,
         receiver: GenericNetworkId,
         commitment: UnboundedGenericCommitment,
-    ) -> AnyResult<()> {
+    ) -> AnyResult<InboundCommitmentSubmissionStatus> {
         info!("Submit commitment {commitment:?}");
         let message =
             sp_runtime::traits::Keccak256::hash_of(&(sender, receiver, commitment.hash()));
+        debug!(
+            "Inbound commitment context: sender={sender:?}, receiver={receiver:?}, nonce={}, hash={:?}, approval_message={message:?}, signer={:?}",
+            commitment.nonce(),
+            commitment.hash(),
+            signer.public(),
+        );
         self.approve_message(signer, sender, message).await?;
         if self.should_send_commitment(&sender, message).await? {
             info!("Sending commitment");
             let approvals = self.bridge_approvals(&sender, message).await?;
+            debug!(
+                "Building inbound commitment proof: sender={sender:?}, message={message:?}, approval_count={}, commitment_nonce={}, commitment_hash={:?}",
+                approvals.len(),
+                commitment.nonce(),
+                commitment.hash(),
+            );
             let proof = VerifierMultiProof::EVMMultisig(
                 runtime::runtime_types::multisig_verifier::MultiEVMProof {
                     proof: approvals.try_into().unwrap(),
@@ -665,18 +755,42 @@ impl UnsignedClient<MainnetConfig> {
             );
             let success = self
                 .submit_concurrent_unsigned_extrinsic(
-                    &runtime::tx()
-                        .bridge_inbound_channel()
-                        .submit(sender, commitment, proof),
+                    &runtime::tx().bridge_inbound_channel().submit(
+                        sender,
+                        commitment.clone(),
+                        proof,
+                    ),
                 )
                 .await?;
-            if success {
-                info!("Commitment submitted by this relayer");
-            } else {
-                info!("Commitment will be submitted by another relayer");
+            match success {
+                SubmissionOutcome::Submitted => info!("Commitment submitted by this relayer"),
+                SubmissionOutcome::AlreadyInPool => {
+                    info!("Commitment will be submitted by another relayer")
+                }
+                SubmissionOutcome::TemporarilyBanned => {
+                    warn!("Commitment submission is temporarily banned; retrying later")
+                }
             }
+            let status = resolve_inbound_commitment_submission(success, || async {
+                let finalized_head = self.finalized_head().await?;
+                debug!(
+                    "Checking finalized commitment state after pool outcome: sender={sender:?}, message={message:?}, commitment_nonce={}, commitment_hash={:?}, finalized_head={finalized_head:?}, outcome={success:?}",
+                    commitment.nonce(),
+                    commitment.hash(),
+                );
+                self.inbound_commitment_processed_at(&sender, &commitment, finalized_head.into())
+                    .await
+            })
+            .await;
+            Ok(status)
+        } else {
+            debug!(
+                "Commitment is not ready to send: sender={sender:?}, message={message:?}, commitment_nonce={}, commitment_hash={:?}",
+                commitment.nonce(),
+                commitment.hash(),
+            );
+            Ok(InboundCommitmentSubmissionStatus::Pending)
         }
-        Ok(())
     }
 
     pub async fn approve_message(
@@ -685,18 +799,66 @@ impl UnsignedClient<MainnetConfig> {
         sender: GenericNetworkId,
         message: H256,
     ) -> AnyResult<()> {
+        let signer_public = signer.public();
+        debug!(
+            "Checking whether approval is needed: sender={sender:?}, message={message:?}, signer={signer_public:?}",
+        );
         if self
-            .should_send_approval(&sender, signer.public(), message)
+            .should_send_approval(&sender, signer_public, message)
             .await?
         {
             info!("Sending approval");
             let signature = signer.sign_prehashed(&message.0);
-            self.submit_unsigned_extrinsic(
-                &runtime::tx()
-                    .bridge_data_signer()
-                    .approve(sender, message, signature),
-            )
-            .await?;
+            let submitted = self
+                .submit_concurrent_unsigned_extrinsic(
+                    &runtime::tx()
+                        .bridge_data_signer()
+                        .approve(sender, message, signature),
+                )
+                .await?;
+            match submitted {
+                SubmissionOutcome::Submitted => {}
+                SubmissionOutcome::AlreadyInPool => {
+                    info!(
+                        "Approval will be submitted by another relayer or is already in the pool"
+                    );
+                    resolve_approval_submission(submitted, || async {
+                        let finalized_head = self.finalized_head().await?;
+                        debug!(
+                            "Re-checking finalized approval state after AlreadyInPool: sender={sender:?}, message={message:?}, signer={signer_public:?}, finalized_head={finalized_head:?}",
+                        );
+                        self.should_send_approval_at(
+                            &sender,
+                            signer_public,
+                            message,
+                            finalized_head.into(),
+                        )
+                        .await
+                    })
+                    .await?;
+                }
+                SubmissionOutcome::TemporarilyBanned => {
+                    warn!("Approval submission is temporarily banned; checking chain state");
+                    resolve_approval_submission(submitted, || async {
+                        let finalized_head = self.finalized_head().await?;
+                        debug!(
+                            "Re-checking finalized approval state after TemporarilyBanned: sender={sender:?}, message={message:?}, signer={signer_public:?}, finalized_head={finalized_head:?}",
+                        );
+                        self.should_send_approval_at(
+                            &sender,
+                            signer_public,
+                            message,
+                            finalized_head.into(),
+                        )
+                        .await
+                    })
+                    .await?;
+                }
+            }
+        } else {
+            debug!(
+                "Approval is not needed: sender={sender:?}, message={message:?}, signer={signer_public:?}",
+            );
         }
         Ok(())
     }
@@ -707,16 +869,37 @@ impl UnsignedClient<MainnetConfig> {
         signer: ecdsa::Public,
         message: H256,
     ) -> AnyResult<bool> {
-        let peers = self.bridge_peers(network_id).await?;
-        let approvals = self.bridge_approvals(network_id, message).await?;
+        self.should_send_approval_at(network_id, signer, message, BlockNumberOrHash::Best)
+            .await
+    }
+
+    async fn should_send_approval_at(
+        &self,
+        network_id: &GenericNetworkId,
+        signer: ecdsa::Public,
+        message: H256,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<bool> {
+        let peers = self.bridge_peers_at(network_id, at).await?;
+        let approvals = self.bridge_approvals_at(network_id, message, at).await?;
+        let threshold = bridge_types::utils::threshold(peers.len() as u32);
         let is_already_approved = approvals
             .iter()
             .filter_map(|approval| approval.recover_prehashed(&message.0))
             .any(|public| signer == public);
-        Ok(
-            (approvals.len() as u32) < bridge_types::utils::threshold(peers.len() as u32)
-                && !is_already_approved,
-        )
+        if !peers.contains(&signer) {
+            warn!(
+                "Local signer is not a configured bridge peer: network={network_id:?}, message={message:?}, signer={signer:?}, peer_count={}, at={at:?}",
+                peers.len(),
+            );
+        }
+        let should_send = (approvals.len() as u32) < threshold && !is_already_approved;
+        debug!(
+            "Approval decision: network={network_id:?}, message={message:?}, signer={signer:?}, peers={}, approvals={}, threshold={threshold}, already_approved={is_already_approved}, should_send={should_send}, at={at:?}",
+            peers.len(),
+            approvals.len(),
+        );
+        Ok(should_send)
     }
 
     pub async fn should_send_commitment(
@@ -726,7 +909,117 @@ impl UnsignedClient<MainnetConfig> {
     ) -> AnyResult<bool> {
         let peers = self.bridge_peers(network_id).await?;
         let approvals = self.bridge_approvals(network_id, message).await?;
-        Ok((approvals.len() as u32) >= bridge_types::utils::threshold(peers.len() as u32))
+        let threshold = bridge_types::utils::threshold(peers.len() as u32);
+        let should_send = (approvals.len() as u32) >= threshold;
+        debug!(
+            "Commitment decision: network={network_id:?}, message={message:?}, peers={}, approvals={}, threshold={threshold}, should_send={should_send}",
+            peers.len(),
+            approvals.len(),
+        );
+        Ok(should_send)
+    }
+
+    async fn inbound_commitment_processed_at(
+        &self,
+        network_id: &GenericNetworkId,
+        commitment: &UnboundedGenericCommitment,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<bool> {
+        match (network_id, commitment) {
+            (
+                GenericNetworkId::EVM(_),
+                bridge_types::GenericCommitment::EVM(bridge_types::evm::Commitment::Inbound(
+                    commitment,
+                )),
+            ) => {
+                self.inbound_channel_nonce_reached(network_id, commitment.nonce, at)
+                    .await
+            }
+            (
+                GenericNetworkId::EVM(_),
+                bridge_types::GenericCommitment::EVM(bridge_types::evm::Commitment::StatusReport(
+                    commitment,
+                )),
+            ) => {
+                let nonce = self
+                    .storage_fetch_or_default(
+                        &runtime::storage()
+                            .bridge_inbound_channel()
+                            .reported_channel_nonces(network_id),
+                        at,
+                    )
+                    .await?;
+                let processed = nonce >= commitment.nonce;
+                debug!(
+                    "Finalized status-report state: network={network_id:?}, at={at:?}, observed_reported_nonce={nonce}, commitment_nonce={}, processed={processed}",
+                    commitment.nonce,
+                );
+                Ok(processed)
+            }
+            (
+                GenericNetworkId::EVM(chain_id),
+                bridge_types::GenericCommitment::EVM(bridge_types::evm::Commitment::BaseFeeUpdate(
+                    update,
+                )),
+            ) => {
+                let base_fee = self
+                    .storage_fetch(
+                        &runtime::storage().evm_fungible_app().base_fees(*chain_id),
+                        at,
+                    )
+                    .await?;
+                let observed_evm_block =
+                    base_fee.as_ref().map(|base_fee| base_fee.evm_block_number);
+                let processed = observed_evm_block
+                    .map(|evm_block| evm_block >= update.evm_block_number)
+                    .unwrap_or(false);
+                debug!(
+                    "Finalized base-fee state: network={network_id:?}, chain_id={chain_id:?}, at={at:?}, observed_evm_block={observed_evm_block:?}, target_evm_block={}, processed={processed}",
+                    update.evm_block_number,
+                );
+                Ok(processed)
+            }
+            (
+                GenericNetworkId::TON(_),
+                bridge_types::GenericCommitment::TON(bridge_types::ton::Commitment::Inbound(
+                    commitment,
+                )),
+            ) => {
+                self.inbound_channel_nonce_reached(network_id, commitment.nonce, at)
+                    .await
+            }
+            (GenericNetworkId::Sub(_), bridge_types::GenericCommitment::Sub(commitment)) => {
+                self.inbound_channel_nonce_reached(network_id, commitment.nonce, at)
+                    .await
+            }
+            _ => {
+                warn!(
+                    "Commitment/network mismatch while checking finalized state: network={network_id:?}, commitment={commitment:?}, at={at:?}",
+                );
+                Ok(false)
+            }
+        }
+    }
+
+    async fn inbound_channel_nonce_reached(
+        &self,
+        network_id: &GenericNetworkId,
+        commitment_nonce: u64,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<bool> {
+        let nonce = self
+            .storage_fetch_or_default(
+                &runtime::storage()
+                    .bridge_inbound_channel()
+                    .channel_nonces(network_id),
+                at,
+            )
+            .await?;
+        let processed = nonce >= commitment_nonce;
+        debug!(
+            "Finalized inbound nonce state: network={network_id:?}, at={at:?}, observed_nonce={nonce}, commitment_nonce={commitment_nonce}, processed={processed}",
+        );
+        Ok(processed)
     }
 
     pub async fn bridge_approvals(
@@ -734,25 +1027,55 @@ impl UnsignedClient<MainnetConfig> {
         network_id: &GenericNetworkId,
         message: H256,
     ) -> AnyResult<Vec<ecdsa::Signature>> {
-        let peers = self.bridge_peers(network_id).await?;
+        self.bridge_approvals_at(network_id, message, BlockNumberOrHash::Best)
+            .await
+    }
+
+    async fn bridge_approvals_at(
+        &self,
+        network_id: &GenericNetworkId,
+        message: H256,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<Vec<ecdsa::Signature>> {
+        let peers = self.bridge_peers_at(network_id, at).await?;
         let approvals = self
             .storage_fetch_or_default(
                 &runtime::storage()
                     .bridge_data_signer()
                     .approvals(network_id, message),
-                (),
+                at,
             )
             .await?;
+        debug!(
+            "Fetched bridge approvals: network={network_id:?}, message={message:?}, raw_approvals={}, peer_count={}, at={at:?}",
+            approvals.len(),
+            peers.len(),
+        );
         let mut acceptable_approvals = vec![];
-        for approval in approvals {
-            let public = approval
-                .1
-                .recover_prehashed(&message.0)
-                .ok_or(anyhow!("Wrong signature in data signer pallet"))?;
+        for (idx, approval) in approvals.into_iter().enumerate() {
+            let public = approval.1.recover_prehashed(&message.0).ok_or_else(|| {
+                error!(
+                    "Could not recover approval signer: network={network_id:?}, message={message:?}, approval_index={idx}, at={at:?}",
+                );
+                anyhow!("Wrong signature in data signer pallet")
+            })?;
             if peers.contains(&public) {
+                debug!(
+                    "Accepted bridge approval: network={network_id:?}, message={message:?}, approval_index={idx}, peer={public:?}, at={at:?}",
+                );
                 acceptable_approvals.push(approval.1);
+            } else {
+                warn!(
+                    "Ignoring approval from non-peer signer: network={network_id:?}, message={message:?}, approval_index={idx}, recovered_signer={public:?}, peer_count={}, at={at:?}",
+                    peers.len(),
+                );
             }
         }
+        debug!(
+            "Filtered bridge approvals: network={network_id:?}, message={message:?}, acceptable_approvals={}, peer_count={}, at={at:?}",
+            acceptable_approvals.len(),
+            peers.len(),
+        );
         Ok(acceptable_approvals)
     }
 
@@ -760,15 +1083,733 @@ impl UnsignedClient<MainnetConfig> {
         &self,
         network_id: &GenericNetworkId,
     ) -> AnyResult<BTreeSet<ecdsa::Public>> {
-        let peers = self
+        self.bridge_peers_at(network_id, BlockNumberOrHash::Best)
+            .await
+    }
+
+    async fn bridge_peers_at(
+        &self,
+        network_id: &GenericNetworkId,
+        at: BlockNumberOrHash,
+    ) -> AnyResult<BTreeSet<ecdsa::Public>> {
+        let peers: BTreeSet<ecdsa::Public> = self
             .storage_fetch(
                 &runtime::storage().multisig_verifier().peer_keys(network_id),
-                (),
+                at,
             )
             .await?
             .unwrap_or_default()
             .into_iter()
             .collect();
+        if peers.is_empty() {
+            warn!("No bridge peers configured: network={network_id:?}, at={at:?}");
+        } else {
+            debug!(
+                "Fetched bridge peers: network={network_id:?}, peer_count={}, peers={peers:?}, at={at:?}",
+                peers.len(),
+            );
+        }
         Ok(peers)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::substrate::traits::MainnetConfig;
+
+    type Client = UnsignedClient<MainnetConfig>;
+
+    fn jsonrpsee_call_error(code: i32, message: &str) -> jsonrpsee::core::Error {
+        jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorObject::owned(code, message, None::<()>),
+        ))
+    }
+
+    fn jsonrpsee_call_error_with_data(code: i32, message: &str) -> jsonrpsee::core::Error {
+        jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorObject::owned(
+                code,
+                message,
+                Some(serde_json::json!({
+                    "error": "pool-like text in data must not change classification",
+                    "message": "Transaction is temporarily banned",
+                })),
+            ),
+        ))
+    }
+
+    fn jsonrpsee_call_error_with_fake_pool_code_in_data(code: i32) -> jsonrpsee::core::Error {
+        jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorObject::owned(
+                code,
+                "outer error is not a transaction-pool duplicate",
+                Some(serde_json::json!({
+                    "code": 1012,
+                    "message": "Transaction is temporarily banned",
+                    "nested": {
+                        "code": 1013,
+                        "message": "Already Imported",
+                    },
+                })),
+            ),
+        ))
+    }
+
+    fn subxt_client_error(error: impl std::error::Error + Send + Sync + 'static) -> subxt::Error {
+        subxt::Error::Rpc(subxt::error::RpcError::ClientError(Box::new(error)))
+    }
+
+    fn subxt_pool_error(code: i32, message: &str) -> subxt::Error {
+        subxt_client_error(jsonrpsee_call_error(code, message))
+    }
+
+    #[derive(Debug)]
+    struct SourceWrappedError(jsonrpsee::core::Error);
+
+    impl std::fmt::Display for SourceWrappedError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "wrapped source error: {}", self.0)
+        }
+    }
+
+    impl std::error::Error for SourceWrappedError {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            Some(&self.0)
+        }
+    }
+
+    fn serialized_mmr_proof() -> serde_json::Value {
+        serde_json::to_value(MmrLeavesProof {
+            block_hash: H256::repeat_byte(1),
+            leaves: Bytes(vec![1, 2, 3]),
+            proof: Bytes(vec![4, 5, 6]),
+        })
+        .expect("MMR proof DTO should serialize")
+    }
+
+    #[test]
+    fn approval_submission_succeeds_after_submitted_outcome() {
+        assert!(approval_submission_result(SubmissionOutcome::Submitted, true).is_ok());
+    }
+
+    #[test]
+    fn approval_submission_succeeds_when_pool_outcome_still_needs_approval() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            assert!(
+                approval_submission_result(outcome, true).is_ok(),
+                "expected {outcome:?} to stay non-fatal when approval is still needed"
+            );
+        }
+    }
+
+    #[test]
+    fn approval_submission_succeeds_when_pool_outcome_no_longer_needs_approval() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            assert!(
+                approval_submission_result(outcome, false).is_ok(),
+                "expected {outcome:?} to succeed when approval is no longer needed"
+            );
+        }
+    }
+
+    #[test]
+    fn inbound_commitment_submission_succeeds_after_submitted_outcome() {
+        assert_eq!(
+            inbound_commitment_submission_result(SubmissionOutcome::Submitted, false),
+            InboundCommitmentSubmissionStatus::Processed
+        );
+    }
+
+    #[test]
+    fn inbound_commitment_submission_succeeds_when_pool_outcome_not_finalized() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            assert_eq!(
+                inbound_commitment_submission_result(outcome, false),
+                InboundCommitmentSubmissionStatus::Pending,
+                "expected {outcome:?} to stay non-fatal when commitment is not finalized"
+            );
+        }
+    }
+
+    #[test]
+    fn inbound_commitment_submission_succeeds_when_pool_outcome_is_finalized() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            assert_eq!(
+                inbound_commitment_submission_result(outcome, true),
+                InboundCommitmentSubmissionStatus::Processed,
+                "expected {outcome:?} to succeed when commitment is finalized"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn approval_submission_rechecks_state_for_pool_outcomes() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            let calls = std::cell::Cell::new(0);
+            let result = resolve_approval_submission(outcome, || {
+                calls.set(calls.get() + 1);
+                async { Ok(true) }
+            })
+            .await;
+
+            assert!(result.is_ok());
+            assert_eq!(calls.get(), 1, "expected {outcome:?} to re-check state");
+        }
+    }
+
+    #[tokio::test]
+    async fn approval_submission_does_not_recheck_state_for_submitted_outcome() {
+        let calls = std::cell::Cell::new(0);
+        let result = resolve_approval_submission(SubmissionOutcome::Submitted, || {
+            calls.set(calls.get() + 1);
+            async { Ok(true) }
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(calls.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn approval_submission_tolerates_state_recheck_errors_for_pool_outcomes() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            let result = resolve_approval_submission(outcome, || async {
+                Err::<bool, _>(anyhow!("approval state recheck failed"))
+            })
+            .await;
+
+            assert!(
+                result.is_ok(),
+                "expected {outcome:?} to stay non-fatal when approval state recheck fails"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn inbound_commitment_submission_rechecks_state_for_pool_outcomes() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            let calls = std::cell::Cell::new(0);
+            let result = resolve_inbound_commitment_submission(outcome, || {
+                calls.set(calls.get() + 1);
+                async { Ok(true) }
+            })
+            .await;
+
+            assert_eq!(result, InboundCommitmentSubmissionStatus::Processed);
+            assert_eq!(calls.get(), 1, "expected {outcome:?} to re-check state");
+        }
+    }
+
+    #[tokio::test]
+    async fn inbound_commitment_submission_tolerates_state_recheck_errors_for_pool_outcomes() {
+        for outcome in [
+            SubmissionOutcome::AlreadyInPool,
+            SubmissionOutcome::TemporarilyBanned,
+        ] {
+            let result = resolve_inbound_commitment_submission(outcome, || async {
+                Err::<bool, _>(anyhow!("commitment state recheck failed"))
+            })
+            .await;
+
+            assert_eq!(
+                result,
+                InboundCommitmentSubmissionStatus::Pending,
+                "expected {outcome:?} to stay non-fatal when commitment state recheck fails"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn inbound_commitment_submission_tolerates_low_priority_before_finalization() {
+        let outcome = Client::transaction_pool_submission_outcome(&subxt_pool_error(
+            1014,
+            "The transaction has too low priority to replace another transaction already in the pool.",
+        ))
+        .expect("low-priority pool code should classify");
+
+        assert_eq!(
+            resolve_inbound_commitment_submission(outcome, || async { Ok(false) }).await,
+            InboundCommitmentSubmissionStatus::Pending,
+            "low-priority pool outcome must stay non-fatal before finalized commitment state"
+        );
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_missing_required_fields() {
+        for field in ["blockHash", "leaves", "proof"] {
+            let mut value = serialized_mmr_proof();
+            value
+                .as_object_mut()
+                .expect("serialized proof should be an object")
+                .remove(field);
+
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof without {field} must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn mmr_leaves_proof_accepts_snake_case_block_hash() {
+        let mut value = serialized_mmr_proof();
+        let object = value
+            .as_object_mut()
+            .expect("serialized proof should be an object");
+        let block_hash = object.remove("blockHash").expect("blockHash should exist");
+        let expected_block_hash: H256 =
+            serde_json::from_value(block_hash.clone()).expect("blockHash should decode as H256");
+        object.insert("block_hash".to_string(), block_hash);
+
+        assert_eq!(
+            serde_json::from_value::<MmrLeavesProof<H256>>(value)
+                .expect("MMR proof should accept RPC snake_case block_hash")
+                .block_hash,
+            expected_block_hash
+        );
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_malformed_block_hash() {
+        for block_hash in [
+            serde_json::json!("0x1234"),
+            serde_json::json!("not-a-hash"),
+            serde_json::json!(null),
+            serde_json::json!(123),
+        ] {
+            let mut value = serialized_mmr_proof();
+            value
+                .as_object_mut()
+                .expect("serialized proof should be an object")
+                .insert("blockHash".to_string(), block_hash);
+
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof with malformed block hash must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_malformed_byte_fields() {
+        for field in ["leaves", "proof"] {
+            let mut value = serialized_mmr_proof();
+            value
+                .as_object_mut()
+                .expect("serialized proof should be an object")
+                .insert(field.to_string(), serde_json::json!(123));
+
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof with malformed {field} must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_null_byte_fields() {
+        for field in ["leaves", "proof"] {
+            let mut value = serialized_mmr_proof();
+            value
+                .as_object_mut()
+                .expect("serialized proof should be an object")
+                .insert(field.to_string(), serde_json::Value::Null);
+
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof with null {field} must fail"
+            );
+        }
+    }
+
+    #[test]
+    fn mmr_leaves_proof_rejects_non_object_json() {
+        for value in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!("not-an-object"),
+        ] {
+            assert!(
+                serde_json::from_value::<MmrLeavesProof<H256>>(value).is_err(),
+                "MMR proof must be an object"
+            );
+        }
+    }
+
+    #[test]
+    fn recognizes_duplicate_or_banned_pool_codes() {
+        for (code, message, outcome) in [
+            (
+                1012,
+                "Transaction is temporarily banned",
+                SubmissionOutcome::TemporarilyBanned,
+            ),
+            (1013, "Already Imported", SubmissionOutcome::AlreadyInPool),
+            (
+                1014,
+                "The transaction has too low priority to replace another transaction already in the pool.",
+                SubmissionOutcome::AlreadyInPool,
+            ),
+        ] {
+            let error = subxt_pool_error(code, message);
+            assert_eq!(
+                Client::transaction_pool_submission_outcome(&error),
+                Some(outcome),
+                "expected pool code {code} to classify to {outcome:?}"
+            );
+            assert!(
+                Client::is_transaction_imported_or_banned(&error),
+                "expected pool code {code} to be tolerated"
+            );
+        }
+    }
+
+    #[test]
+    fn recognizes_pool_codes_with_unexpected_messages_and_data() {
+        for code in [1012, 1013, 1014] {
+            let error = subxt_client_error(jsonrpsee_call_error_with_data(
+                code,
+                "unexpected upstream message",
+            ));
+            assert!(
+                Client::is_transaction_imported_or_banned(&error),
+                "expected pool code {code} to be tolerated independent of message/data"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_spoofed_messages_with_unrecognized_codes() {
+        for (code, message) in [
+            (1010, "Transaction is temporarily banned"),
+            (1011, "Transaction is temporarily banned"),
+            (1015, "Already Imported"),
+            (1016, "The transaction has too low priority to replace another transaction already in the pool."),
+            (9999, "Transaction is temporarily banned"),
+            (-32700, "Transaction is temporarily banned"),
+            (-32603, "Already Imported"),
+            (-32604, "The transaction has too low priority to replace another transaction already in the pool."),
+            (-32000, "Transaction is temporarily banned"),
+        ] {
+            let error = subxt_pool_error(code, message);
+            assert!(
+                Client::transaction_pool_submission_outcome(&error).is_none(),
+                "unexpectedly tolerated spoofed pool message with code {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_near_miss_pool_codes_around_the_allowed_range() {
+        for code in 1008..=1018 {
+            if [1012, 1013, 1014].contains(&code) {
+                continue;
+            }
+
+            for message in [
+                "Transaction is temporarily banned",
+                "Already Imported",
+                "The transaction has too low priority to replace another transaction already in the pool.",
+            ] {
+                let error = subxt_pool_error(code, message);
+                assert_eq!(
+                    Client::transaction_pool_submission_outcome(&error),
+                    None,
+                    "unexpectedly tolerated near-miss pool code {code}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_pool_codes_hidden_in_jsonrpc_data() {
+        for code in [-32700, -32603, -32000, 0, 1011, 1015] {
+            let error = subxt_client_error(jsonrpsee_call_error_with_fake_pool_code_in_data(code));
+            assert!(
+                !Client::is_transaction_imported_or_banned(&error),
+                "unexpectedly tolerated fake nested pool code under outer code {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_extreme_codes_even_with_pool_like_messages() {
+        for code in [i32::MIN, -1, 0, 1, 1000, 10_120, i32::MAX] {
+            for message in [
+                "Transaction is temporarily banned",
+                "Already Imported",
+                "The transaction has too low priority to replace another transaction already in the pool.",
+            ] {
+                let error = subxt_pool_error(code, message);
+                assert!(
+                    !Client::is_transaction_imported_or_banned(&error),
+                    "unexpectedly tolerated extreme or unrelated code {code}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_non_custom_jsonrpsee_call_errors() {
+        let failed_call = jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Failed(
+            anyhow!("Transaction is temporarily banned"),
+        ));
+        let invalid_params = jsonrpsee::core::Error::Call(
+            jsonrpsee::types::error::CallError::InvalidParams(anyhow!("Already Imported")),
+        );
+
+        for error in [
+            subxt_client_error(failed_call),
+            subxt_client_error(invalid_params),
+        ] {
+            assert!(!Client::is_transaction_imported_or_banned(&error));
+        }
+    }
+
+    #[test]
+    fn rejects_jsonrpsee_non_call_errors_with_pool_like_text() {
+        for error in [
+            jsonrpsee::core::Error::Custom("Transaction is temporarily banned".to_string()),
+            jsonrpsee::core::Error::Custom("Already Imported".to_string()),
+            jsonrpsee::core::Error::RequestTimeout,
+            jsonrpsee::core::Error::MethodNotFound("author_submitAndWatchExtrinsic".to_string()),
+            jsonrpsee::core::Error::InvalidSubscriptionId,
+        ] {
+            assert!(!Client::is_transaction_imported_or_banned(
+                &subxt_client_error(error)
+            ));
+        }
+    }
+
+    #[test]
+    fn rejects_additional_jsonrpsee_non_pool_variants() {
+        for error in [
+            jsonrpsee::core::Error::Transport(anyhow!("Transaction is temporarily banned")),
+            jsonrpsee::core::Error::RestartNeeded("Already Imported".to_string()),
+            jsonrpsee::core::Error::InvalidRequestId,
+            jsonrpsee::core::Error::DuplicateRequestId,
+            jsonrpsee::core::Error::MethodAlreadyRegistered(
+                "author_submitAndWatchExtrinsic".to_string(),
+            ),
+            jsonrpsee::core::Error::SubscriptionNameConflict(
+                "author_submitAndWatchExtrinsic".to_string(),
+            ),
+            jsonrpsee::core::Error::MaxSlotsExceeded,
+            jsonrpsee::core::Error::HttpNotImplemented,
+            jsonrpsee::core::Error::EmptyBatchRequest,
+        ] {
+            assert!(!Client::is_transaction_imported_or_banned(
+                &subxt_client_error(error)
+            ));
+        }
+    }
+
+    #[test]
+    fn rejects_non_jsonrpsee_client_errors_with_pool_like_text() {
+        let io_error = std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Transaction is temporarily banned",
+        );
+        let error = subxt_client_error(io_error);
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn rejects_source_wrapped_jsonrpsee_client_errors() {
+        let wrapped = SourceWrappedError(jsonrpsee_call_error(
+            1012,
+            "Transaction is temporarily banned",
+        ));
+        let error = subxt_client_error(wrapped);
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn rejects_pool_codes_encoded_only_in_plaintext_client_errors() {
+        for message in [
+            "Custom error: code=1012 message='Transaction is temporarily banned'",
+            "JSON-RPC error 1013: Already Imported",
+            "1014: The transaction has too low priority to replace another transaction already in the pool.",
+            r#"{"code":1012,"message":"Transaction is temporarily banned"}"#,
+            r#"{"error":{"code":1013,"message":"Already Imported"}}"#,
+        ] {
+            let error = subxt_client_error(std::io::Error::new(std::io::ErrorKind::Other, message));
+
+            assert_eq!(Client::transaction_pool_submission_outcome(&error), None);
+        }
+    }
+
+    #[test]
+    fn rejects_pool_codes_when_outer_jsonrpc_code_is_server_error() {
+        for outer_code in [-32099, -32000, -32603] {
+            for hidden_code in [1012, 1013, 1014] {
+                let error = subxt_client_error(jsonrpsee::core::Error::Call(
+                    jsonrpsee::types::error::CallError::Custom(
+                        jsonrpsee::types::error::ErrorObject::owned(
+                            outer_code,
+                            "server error with misleading pool details",
+                            Some(serde_json::json!({
+                                "code": hidden_code,
+                                "message": "Already Imported",
+                            })),
+                        ),
+                    ),
+                ));
+
+                assert_eq!(
+                    Client::transaction_pool_submission_outcome(&error),
+                    None,
+                    "unexpectedly trusted hidden pool code {hidden_code} under outer code {outer_code}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_pool_codes_hidden_in_stringified_jsonrpc_data() {
+        for outer_code in [-32099, -32000, -32603, 1011, 1015] {
+            let error = subxt_client_error(jsonrpsee::core::Error::Call(
+                jsonrpsee::types::error::CallError::Custom(
+                    jsonrpsee::types::error::ErrorObject::owned(
+                        outer_code,
+                        "outer code must be authoritative",
+                        Some(r#"{"code":1012,"message":"Transaction is temporarily banned"}"#),
+                    ),
+                ),
+            ));
+
+            assert_eq!(
+                Client::transaction_pool_submission_outcome(&error),
+                None,
+                "unexpectedly trusted stringified JSON data under outer code {outer_code}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_pool_codes_hidden_in_array_jsonrpc_data() {
+        for outer_code in [-32000, 0, 1011, 1015] {
+            let error = subxt_client_error(jsonrpsee::core::Error::Call(
+                jsonrpsee::types::error::CallError::Custom(
+                    jsonrpsee::types::error::ErrorObject::owned(
+                        outer_code,
+                        "outer code must be authoritative",
+                        Some(serde_json::json!([
+                            {"code": 1012, "message": "Transaction is temporarily banned"},
+                            {"code": 1013, "message": "Already Imported"}
+                        ])),
+                    ),
+                ),
+            ));
+
+            assert_eq!(
+                Client::transaction_pool_submission_outcome(&error),
+                None,
+                "unexpectedly trusted array JSON data under outer code {outer_code}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_jsonrpc_parse_and_protocol_error_codes_with_pool_data() {
+        for error_object in [
+            jsonrpsee::types::error::ErrorObject::owned(
+                -32700,
+                "Transaction is temporarily banned",
+                Some(serde_json::json!({
+                    "code": 1012,
+                    "message": "Transaction is temporarily banned",
+                })),
+            ),
+            jsonrpsee::types::error::ErrorObject::owned(
+                -32600,
+                "Already Imported",
+                Some(serde_json::json!({
+                    "code": 1013,
+                    "message": "Already Imported",
+                })),
+            ),
+        ] {
+            let error = subxt_client_error(jsonrpsee::core::Error::Call(
+                jsonrpsee::types::error::CallError::Custom(error_object),
+            ));
+
+            assert_eq!(Client::transaction_pool_submission_outcome(&error), None);
+        }
+    }
+
+    #[test]
+    fn rejects_rpc_subscription_dropped() {
+        let error = subxt::Error::Rpc(subxt::error::RpcError::SubscriptionDropped);
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn rejects_transaction_validity_errors() {
+        use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
+
+        let error =
+            subxt::Error::Invalid(TransactionValidityError::Invalid(InvalidTransaction::Stale));
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn rejects_serialization_and_metadata_independent_subxt_errors() {
+        let serialization_error =
+            serde_json::from_str::<serde_json::Value>("not-json").expect_err("invalid json");
+        let errors = [
+            subxt::Error::Serialization(serialization_error),
+            subxt::Error::Metadata(subxt::error::MetadataError::IncompatibleMetadata),
+            subxt::Error::Other("Already Imported".to_string()),
+        ];
+
+        for error in errors {
+            assert!(!Client::is_transaction_imported_or_banned(&error));
+        }
+    }
+
+    #[test]
+    fn rejects_non_rpc_subxt_errors_with_pool_like_text() {
+        let error = subxt::Error::Other("Transaction is temporarily banned".to_string());
+
+        assert!(!Client::is_transaction_imported_or_banned(&error));
+    }
+
+    #[test]
+    fn detects_context_wrapped_pool_errors_after_submit_failure() {
+        let error = anyhow::Error::new(subxt_pool_error(1012, "Transaction is temporarily banned"))
+            .context("sign and submit then watch");
+
+        let subxt_error = error
+            .downcast_ref::<subxt::Error>()
+            .expect("context should preserve the wrapped subxt error");
+
+        assert!(Client::is_transaction_imported_or_banned(subxt_error));
     }
 }

@@ -223,6 +223,63 @@ impl LiberlandClient {
     }
 }
 
+#[derive(Args, Debug, Clone, Default)]
+pub struct BridgeSigner {
+    /// Signer for bridge messages
+    #[clap(long)]
+    signer: Option<String>,
+    /// File containing signer for bridge messages
+    #[clap(long)]
+    signer_file: Option<PathBuf>,
+}
+
+impl BridgeSigner {
+    fn normalize_key(key: String) -> String {
+        key.trim_end_matches(&['\r', '\n'][..]).to_string()
+    }
+
+    fn normalize_required_key(key: String) -> AnyResult<String> {
+        let key = Self::normalize_key(key);
+        if key.trim().is_empty() {
+            Err(anyhow!("Bridge signer is empty"))
+        } else if key.contains('\0') {
+            Err(anyhow!("Bridge signer contains NUL byte"))
+        } else {
+            Ok(key)
+        }
+    }
+
+    pub fn get_optional_key_string(&self) -> AnyResult<Option<String>> {
+        match (&self.signer, &self.signer_file) {
+            (Some(_), Some(_)) => Err(CliError::BothKeyTypesProvided.into()),
+            (None, None) => Ok(None),
+            (Some(key), _) => Ok(Some(Self::normalize_required_key(key.clone())?)),
+            (_, Some(key_file)) => Ok(Some(Self::normalize_required_key(
+                std::fs::read_to_string(key_file)?,
+            )?)),
+        }
+    }
+
+    pub fn get_key_string(&self) -> AnyResult<String> {
+        self.get_optional_key_string()?
+            .ok_or_else(|| anyhow!("Provide bridge signer via --signer or --signer-file"))
+    }
+
+    pub fn get_optional_pair(&self) -> AnyResult<Option<sp_core::ecdsa::Pair>> {
+        self.get_optional_key_string()?
+            .map(|key| {
+                sp_core::ecdsa::Pair::from_string(&key, None)
+                    .map_err(|e| anyhow!("Invalid signer key: {:?}", e))
+            })
+            .transpose()
+    }
+
+    pub fn get_pair(&self) -> AnyResult<sp_core::ecdsa::Pair> {
+        sp_core::ecdsa::Pair::from_string(&self.get_key_string()?, None)
+            .map_err(|e| anyhow!("Invalid signer key: {:?}", e))
+    }
+}
+
 #[derive(Args, Debug, Clone)]
 pub struct BridgePeers {
     /// Bridge peers
@@ -304,5 +361,615 @@ impl TonNetworkSelector {
             Self::Mainnet => TonNetworkId::Mainnet,
             Self::Testnet => TonNetworkId::Testnet,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sp_core::Pair as _;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
+
+    fn temp_signer_file(contents: &str) -> PathBuf {
+        let mut path = std::env::temp_dir();
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before Unix epoch")
+            .as_nanos();
+        let sequence = NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
+        path.push(format!(
+            "bridge-relayer-signer-test-{}-{nonce}-{sequence}.seed",
+            std::process::id()
+        ));
+        std::fs::write(&path, contents).expect("write signer file");
+        path
+    }
+
+    fn temp_signer_file_bytes(contents: &[u8]) -> PathBuf {
+        let mut path = std::env::temp_dir();
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before Unix epoch")
+            .as_nanos();
+        let sequence = NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
+        path.push(format!(
+            "bridge-relayer-signer-test-{}-{nonce}-{sequence}.seed",
+            std::process::id()
+        ));
+        std::fs::write(&path, contents).expect("write signer file");
+        path
+    }
+
+    fn temp_test_dir(prefix: &str) -> PathBuf {
+        let mut directory = std::env::temp_dir();
+        directory.push(format!(
+            "bridge-relayer-{prefix}-dir-test-{}-{}",
+            std::process::id(),
+            NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir(&directory).expect("create temp test directory");
+        directory
+    }
+
+    #[test]
+    fn bridge_signer_file_trims_only_trailing_line_endings() {
+        let signer_file = temp_signer_file("  alpha\nbeta  \r\n\n");
+        let signer = BridgeSigner {
+            signer: None,
+            signer_file: Some(signer_file.clone()),
+        };
+
+        assert_eq!(signer.get_key_string().unwrap(), "  alpha\nbeta  ");
+
+        let _ = std::fs::remove_file(signer_file);
+    }
+
+    #[test]
+    fn bridge_signer_inline_trims_trailing_line_endings() {
+        let signer = BridgeSigner {
+            signer: Some("//Alice\r\n".to_string()),
+            signer_file: None,
+        };
+
+        assert_eq!(signer.get_key_string().unwrap(), "//Alice");
+    }
+
+    #[test]
+    fn bridge_signer_rejects_both_inline_and_file_before_reading_file() {
+        let signer = BridgeSigner {
+            signer: Some("//Alice".to_string()),
+            signer_file: Some(PathBuf::from("/path/that/should/not/be/read")),
+        };
+
+        let err = signer.get_optional_key_string().unwrap_err();
+        assert_eq!(err.to_string(), CliError::BothKeyTypesProvided.to_string());
+        let err = signer.get_key_string().unwrap_err();
+        assert_eq!(err.to_string(), CliError::BothKeyTypesProvided.to_string());
+        let err = signer
+            .get_optional_pair()
+            .err()
+            .expect("conflicting signer sources must fail");
+        assert_eq!(err.to_string(), CliError::BothKeyTypesProvided.to_string());
+        let err = signer
+            .get_pair()
+            .err()
+            .expect("conflicting signer sources must fail");
+        assert_eq!(err.to_string(), CliError::BothKeyTypesProvided.to_string());
+    }
+
+    #[test]
+    fn bridge_signer_required_key_rejects_missing_sources() {
+        let err = BridgeSigner::default().get_key_string().unwrap_err();
+
+        assert!(err.to_string().contains("--signer"));
+        assert!(err.to_string().contains("--signer-file"));
+    }
+
+    #[test]
+    fn bridge_signer_optional_key_allows_missing_sources() {
+        assert_eq!(
+            BridgeSigner::default().get_optional_key_string().unwrap(),
+            None
+        );
+        assert!(BridgeSigner::default()
+            .get_optional_pair()
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn bridge_signer_file_with_line_ending_matches_inline_pair() {
+        let signer_file = temp_signer_file("//Alice\n");
+        let file_pair = BridgeSigner {
+            signer: None,
+            signer_file: Some(signer_file.clone()),
+        }
+        .get_pair()
+        .unwrap();
+        let inline_pair = BridgeSigner {
+            signer: Some("//Alice".to_string()),
+            signer_file: None,
+        }
+        .get_pair()
+        .unwrap();
+
+        assert_eq!(file_pair.public(), inline_pair.public());
+
+        let _ = std::fs::remove_file(signer_file);
+    }
+
+    #[test]
+    fn bridge_signer_invalid_file_key_is_rejected() {
+        let signer_file = temp_signer_file("not a valid signer seed\n");
+        let signer = BridgeSigner {
+            signer: None,
+            signer_file: Some(signer_file.clone()),
+        };
+
+        let err = signer
+            .get_pair()
+            .err()
+            .expect("invalid signer file must fail");
+        assert!(err.to_string().contains("Invalid signer key"));
+
+        let _ = std::fs::remove_file(signer_file);
+    }
+
+    #[test]
+    fn bridge_signer_empty_file_key_is_rejected() {
+        let signer_file = temp_signer_file("\r\n\n");
+        let signer = BridgeSigner {
+            signer: None,
+            signer_file: Some(signer_file.clone()),
+        };
+
+        for err in [
+            signer.get_optional_key_string().unwrap_err(),
+            signer.get_key_string().unwrap_err(),
+            signer
+                .get_optional_pair()
+                .err()
+                .expect("empty signer file must fail"),
+            signer
+                .get_pair()
+                .err()
+                .expect("empty signer file must fail"),
+        ] {
+            assert!(err.to_string().contains("Bridge signer is empty"));
+        }
+
+        let _ = std::fs::remove_file(signer_file);
+    }
+
+    #[test]
+    fn bridge_signer_empty_inline_key_is_rejected() {
+        for raw_key in ["", "\n", "\r\n\n", "   \n", "\t\r\n"] {
+            let signer = BridgeSigner {
+                signer: Some(raw_key.to_string()),
+                signer_file: None,
+            };
+
+            for err in [
+                signer.get_optional_key_string().unwrap_err(),
+                signer.get_key_string().unwrap_err(),
+                signer
+                    .get_optional_pair()
+                    .err()
+                    .expect("empty inline signer must fail"),
+                signer
+                    .get_pair()
+                    .err()
+                    .expect("empty inline signer must fail"),
+            ] {
+                assert!(err.to_string().contains("Bridge signer is empty"));
+            }
+        }
+    }
+
+    #[test]
+    fn bridge_signer_whitespace_only_file_key_is_rejected() {
+        let signer_file = temp_signer_file("   \t \r\n");
+        let signer = BridgeSigner {
+            signer: None,
+            signer_file: Some(signer_file.clone()),
+        };
+
+        for err in [
+            signer.get_optional_key_string().unwrap_err(),
+            signer.get_key_string().unwrap_err(),
+            signer
+                .get_optional_pair()
+                .err()
+                .expect("whitespace-only signer file must fail"),
+            signer
+                .get_pair()
+                .err()
+                .expect("whitespace-only signer file must fail"),
+        ] {
+            assert!(err.to_string().contains("Bridge signer is empty"));
+        }
+
+        let _ = std::fs::remove_file(signer_file);
+    }
+
+    #[test]
+    fn bridge_signer_missing_file_is_rejected_for_optional_and_required_paths() {
+        let mut missing = std::env::temp_dir();
+        missing.push(format!(
+            "bridge-relayer-missing-signer-test-{}-{}",
+            std::process::id(),
+            NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        let signer = BridgeSigner {
+            signer: None,
+            signer_file: Some(missing),
+        };
+
+        assert!(signer.get_optional_key_string().is_err());
+        assert!(signer.get_key_string().is_err());
+        assert!(signer.get_optional_pair().is_err());
+        assert!(signer.get_pair().is_err());
+    }
+
+    #[test]
+    fn bridge_signer_directory_path_is_rejected() {
+        let mut directory = std::env::temp_dir();
+        directory.push(format!(
+            "bridge-relayer-signer-dir-test-{}-{}",
+            std::process::id(),
+            NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir(&directory).expect("create signer directory");
+        let signer = BridgeSigner {
+            signer: None,
+            signer_file: Some(directory.clone()),
+        };
+
+        assert!(signer.get_optional_key_string().is_err());
+        assert!(signer.get_key_string().is_err());
+        assert!(signer.get_optional_pair().is_err());
+        assert!(signer.get_pair().is_err());
+
+        let _ = std::fs::remove_dir(directory);
+    }
+
+    #[test]
+    fn bridge_signer_invalid_utf8_file_is_rejected() {
+        let signer_file = temp_signer_file_bytes(&[0xff, 0xfe, b'\n']);
+        let signer = BridgeSigner {
+            signer: None,
+            signer_file: Some(signer_file.clone()),
+        };
+
+        assert!(signer.get_optional_key_string().is_err());
+        assert!(signer.get_key_string().is_err());
+        assert!(signer.get_optional_pair().is_err());
+        assert!(signer.get_pair().is_err());
+
+        let _ = std::fs::remove_file(signer_file);
+    }
+
+    #[test]
+    fn bridge_signer_preserves_trailing_spaces_as_key_material() {
+        let signer = BridgeSigner {
+            signer: Some("//Alice  \n".to_string()),
+            signer_file: None,
+        };
+
+        assert_eq!(signer.get_key_string().unwrap(), "//Alice  ");
+        assert!(signer.get_pair().is_ok());
+    }
+
+    #[test]
+    fn bridge_signer_rejects_nul_containing_inline_key() {
+        let signer = BridgeSigner {
+            signer: Some("//Alice\0//Bob".to_string()),
+            signer_file: None,
+        };
+
+        for err in [
+            signer.get_optional_key_string().unwrap_err(),
+            signer.get_key_string().unwrap_err(),
+            signer
+                .get_optional_pair()
+                .err()
+                .expect("NUL-containing signer must fail"),
+            signer
+                .get_pair()
+                .err()
+                .expect("NUL-containing signer must fail"),
+        ] {
+            assert!(err.to_string().contains("NUL"));
+        }
+    }
+
+    #[test]
+    fn bridge_signer_rejects_nul_containing_file_key() {
+        let signer_file = temp_signer_file("//Alice\0//Bob\n");
+        let signer = BridgeSigner {
+            signer: None,
+            signer_file: Some(signer_file.clone()),
+        };
+
+        for err in [
+            signer.get_optional_key_string().unwrap_err(),
+            signer.get_key_string().unwrap_err(),
+            signer
+                .get_optional_pair()
+                .err()
+                .expect("NUL-containing signer file must fail"),
+            signer
+                .get_pair()
+                .err()
+                .expect("NUL-containing signer file must fail"),
+        ] {
+            assert!(err.to_string().contains("NUL"));
+        }
+
+        let _ = std::fs::remove_file(signer_file);
+    }
+
+    #[test]
+    fn bridge_peers_rejects_malformed_public_key() {
+        let peers = BridgePeers {
+            peers: vec!["not-a-public-key".to_string()],
+        };
+
+        assert!(peers.ecdsa_keys().is_err());
+        assert!(peers.evm_addresses().is_err());
+    }
+
+    #[test]
+    fn bridge_peers_rejects_invalid_peer_after_valid_peer() {
+        let valid_peer = sp_core::ecdsa::Pair::from_string("//Alice", None)
+            .unwrap()
+            .public()
+            .to_ss58check();
+        let peers = BridgePeers {
+            peers: vec![valid_peer, "0x1234".to_string()],
+        };
+
+        assert!(peers.ecdsa_keys().is_err());
+        assert!(peers.evm_addresses().is_err());
+    }
+
+    #[test]
+    fn bridge_peers_rejects_nul_containing_peer() {
+        let peers = BridgePeers {
+            peers: vec!["0x1234\0".to_string()],
+        };
+
+        assert!(peers.ecdsa_keys().is_err());
+        assert!(peers.evm_addresses().is_err());
+    }
+
+    #[test]
+    fn bridge_peers_rejects_empty_peer_entry() {
+        let peers = BridgePeers {
+            peers: vec!["".to_string()],
+        };
+
+        assert!(peers.ecdsa_keys().is_err());
+        assert!(peers.evm_addresses().is_err());
+    }
+
+    #[test]
+    fn bridge_peers_rejects_whitespace_peer_entry() {
+        let peers = BridgePeers {
+            peers: vec!["   \t".to_string()],
+        };
+
+        assert!(peers.ecdsa_keys().is_err());
+        assert!(peers.evm_addresses().is_err());
+    }
+
+    #[test]
+    fn evm_client_rejects_conflicting_key_sources_before_file_read() {
+        let client = EvmClient {
+            evm_key: Some("abc".to_string()),
+            evm_key_file: Some("/path/that/should/not/be/read".to_string()),
+            evm_url: Some(Url::parse("http://localhost:8545").unwrap()),
+            gas_metrics_path: None,
+        };
+
+        let err = client.get_key_string().unwrap_err();
+        assert_eq!(err.to_string(), CliError::BothKeyTypesProvided.to_string());
+    }
+
+    #[test]
+    fn substrate_client_rejects_conflicting_key_sources_before_file_read() {
+        let client = SubstrateClient {
+            substrate_key: Some("//Alice".to_string()),
+            substrate_key_file: Some("/path/that/should/not/be/read".to_string()),
+            substrate_url: Some("ws://localhost:9944".to_string()),
+        };
+
+        let err = client.get_key_string().unwrap_err();
+        assert_eq!(err.to_string(), CliError::BothKeyTypesProvided.to_string());
+    }
+
+    #[test]
+    fn parachain_client_rejects_conflicting_key_sources_before_file_read() {
+        let client = ParachainClient {
+            parachain_key: Some("//Alice".to_string()),
+            parachain_key_file: Some("/path/that/should/not/be/read".to_string()),
+            parachain_url: Some("ws://localhost:8844".to_string()),
+        };
+
+        let err = client.get_key_string().unwrap_err();
+        assert_eq!(err.to_string(), CliError::BothKeyTypesProvided.to_string());
+    }
+
+    #[test]
+    fn liberland_client_rejects_conflicting_key_sources_before_file_read() {
+        let client = LiberlandClient {
+            liberland_key: Some("//Alice".to_string()),
+            liberland_key_file: Some("/path/that/should/not/be/read".to_string()),
+            liberland_url: Some("ws://localhost:7744".to_string()),
+        };
+
+        let err = client.get_key_string().unwrap_err();
+        assert_eq!(err.to_string(), CliError::BothKeyTypesProvided.to_string());
+    }
+
+    #[test]
+    fn evm_client_rejects_missing_url_and_key() {
+        let client = EvmClient {
+            evm_key: None,
+            evm_key_file: None,
+            evm_url: None,
+            gas_metrics_path: None,
+        };
+
+        assert_eq!(
+            client.get_url().unwrap_err().to_string(),
+            CliError::EvmEndpoint.to_string()
+        );
+        assert_eq!(
+            client.get_key_string().unwrap_err().to_string(),
+            CliError::EvmKey.to_string()
+        );
+    }
+
+    #[test]
+    fn substrate_client_rejects_missing_url_and_key() {
+        let client = SubstrateClient {
+            substrate_key: None,
+            substrate_key_file: None,
+            substrate_url: None,
+        };
+
+        assert_eq!(
+            client.get_url().unwrap_err().to_string(),
+            CliError::SubstrateEndpoint.to_string()
+        );
+        assert_eq!(
+            client.get_key_string().unwrap_err().to_string(),
+            CliError::SubstrateKey.to_string()
+        );
+    }
+
+    #[test]
+    fn parachain_client_rejects_missing_url_and_key() {
+        let client = ParachainClient {
+            parachain_key: None,
+            parachain_key_file: None,
+            parachain_url: None,
+        };
+
+        assert_eq!(
+            client.get_url().unwrap_err().to_string(),
+            CliError::ParachainEndpoint.to_string()
+        );
+        assert_eq!(
+            client.get_key_string().unwrap_err().to_string(),
+            CliError::ParachainKey.to_string()
+        );
+    }
+
+    #[test]
+    fn liberland_client_rejects_missing_url_and_key() {
+        let client = LiberlandClient {
+            liberland_key: None,
+            liberland_key_file: None,
+            liberland_url: None,
+        };
+
+        assert_eq!(
+            client.get_url().unwrap_err().to_string(),
+            CliError::LiberlandEndpoint.to_string()
+        );
+        assert_eq!(
+            client.get_key_string().unwrap_err().to_string(),
+            CliError::LiberlandKey.to_string()
+        );
+    }
+
+    #[test]
+    fn chain_clients_reject_directory_key_files() {
+        let substrate_dir = temp_test_dir("substrate-key");
+        let parachain_dir = temp_test_dir("parachain-key");
+        let liberland_dir = temp_test_dir("liberland-key");
+        let evm_dir = temp_test_dir("evm-key");
+        let ton_dir = temp_test_dir("ton-key");
+
+        let substrate = SubstrateClient {
+            substrate_key: None,
+            substrate_key_file: Some(substrate_dir.to_string_lossy().into_owned()),
+            substrate_url: Some("ws://localhost:9944".to_string()),
+        };
+        let parachain = ParachainClient {
+            parachain_key: None,
+            parachain_key_file: Some(parachain_dir.to_string_lossy().into_owned()),
+            parachain_url: Some("ws://localhost:8844".to_string()),
+        };
+        let liberland = LiberlandClient {
+            liberland_key: None,
+            liberland_key_file: Some(liberland_dir.to_string_lossy().into_owned()),
+            liberland_url: Some("ws://localhost:7744".to_string()),
+        };
+        let evm = EvmClient {
+            evm_key: None,
+            evm_key_file: Some(evm_dir.to_string_lossy().into_owned()),
+            evm_url: Some(Url::parse("http://localhost:8545").unwrap()),
+            gas_metrics_path: None,
+        };
+        let ton = TonClientCli {
+            ton_key: None,
+            ton_key_file: Some(ton_dir.to_string_lossy().into_owned()),
+            ton_url: Some(Url::parse("https://ton.example/").unwrap()),
+            ton_api_key: None,
+        };
+
+        assert!(substrate.get_key_string().is_err());
+        assert!(parachain.get_key_string().is_err());
+        assert!(liberland.get_key_string().is_err());
+        assert!(evm.get_key_string().is_err());
+        assert!(ton.get_key_string().is_err());
+
+        for directory in [
+            substrate_dir,
+            parachain_dir,
+            liberland_dir,
+            evm_dir,
+            ton_dir,
+        ] {
+            let _ = std::fs::remove_dir(directory);
+        }
+    }
+
+    #[test]
+    fn ton_client_cli_rejects_conflicting_key_sources_before_file_read() {
+        let client = TonClientCli {
+            ton_key: Some("abc".to_string()),
+            ton_key_file: Some("/path/that/should/not/be/read".to_string()),
+            ton_url: Some(Url::parse("https://ton.example/").unwrap()),
+            ton_api_key: None,
+        };
+
+        let err = client.get_key_string().unwrap_err();
+        assert_eq!(err.to_string(), CliError::BothKeyTypesProvided.to_string());
+    }
+
+    #[test]
+    fn ton_client_cli_rejects_missing_url_and_key() {
+        let client = TonClientCli {
+            ton_key: None,
+            ton_key_file: None,
+            ton_url: None,
+            ton_api_key: None,
+        };
+
+        assert_eq!(
+            client.get_url().unwrap_err().to_string(),
+            CliError::TonEndpoint.to_string()
+        );
+        assert_eq!(
+            client.get_key_string().unwrap_err().to_string(),
+            CliError::TonKey.to_string()
+        );
     }
 }
